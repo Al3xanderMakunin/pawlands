@@ -103,6 +103,10 @@ export async function fetchCurrentUser(token: string): Promise<AuthUser> {
   return parsed.user;
 }
 
+export function getGoogleAuthUrl(): string {
+  return `${apiUrl}/api/v1/auth/google`;
+}
+
 export async function logoutAccount(token: string): Promise<void> {
   try {
     await requestJson("/api/v1/auth/logout", {

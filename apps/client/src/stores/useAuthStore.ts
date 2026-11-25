@@ -3,6 +3,7 @@ import type { AuthErrorCode, AuthUser, LoginRequest, RegisterRequest } from "@pa
 import {
   AuthApiError,
   fetchCurrentUser,
+  getGoogleAuthUrl,
   loginAccount,
   logoutAccount,
   registerAccount,
@@ -50,6 +51,7 @@ interface AuthStoreState {
   clearError: () => void;
   login: (payload: LoginRequest) => Promise<boolean>;
   register: (payload: RegisterRequest) => Promise<boolean>;
+  startGoogleAuth: () => void;
   logout: () => Promise<void>;
   restoreSession: () => Promise<void>;
 }
@@ -126,6 +128,12 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     }
   },
 
+  startGoogleAuth: () => {
+    if (typeof window === "undefined") return;
+    set({ isSubmitting: true, errorCode: null });
+    window.location.assign(getGoogleAuthUrl());
+  },
+
   logout: async () => {
     const token = get().token;
     writeStoredToken(null);
@@ -136,6 +144,34 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
   },
 
   restoreSession: async () => {
+    let oauthError: AuthUiErrorCode | null = null;
+    if (typeof window !== "undefined" && window.location.hash) {
+      const hashParams = new URLSearchParams(window.location.hash.slice(1));
+      const hashToken = hashParams.get("auth_token");
+      const hashError = hashParams.get("auth_error");
+      if (hashToken || hashError) {
+        window.history.replaceState(
+          null,
+          "",
+          `${window.location.pathname}${window.location.search}`
+        );
+      }
+      if (hashToken) {
+        writeStoredToken(hashToken);
+      } else if (hashError) {
+        oauthError = hashError as AuthUiErrorCode;
+      }
+    }
+
+    if (oauthError) {
+      set({
+        isRestoring: false,
+        isAuthModalOpen: true,
+        errorCode: oauthError,
+      });
+      return;
+    }
+
     const token = readStoredToken();
     if (!token) {
       set({ user: null, token: null, isRestoring: false });

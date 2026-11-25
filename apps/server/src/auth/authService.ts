@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type {
   AuthErrorCode,
   AuthResponse,
@@ -6,6 +7,7 @@ import type {
   RegisterRequest,
 } from "@pawlands/protocol";
 import type { AuthRepository, UserRecord } from "./authRepository.js";
+import type { GoogleUserProfile } from "./googleOAuth.js";
 import { signAuthToken, verifyAuthToken } from "./jwt.js";
 import { hashPassword, verifyPassword } from "./password.js";
 
@@ -102,7 +104,7 @@ export class AuthService {
       ? await this.repository.findByEmail(identifier.toLowerCase())
       : await this.repository.findByUsername(identifier);
 
-    if (!user) {
+    if (!user || !user.passwordHash) {
       throw new AuthError("INVALID_CREDENTIALS", "Invalid email/username or password", 401);
     }
 
@@ -124,6 +126,81 @@ export class AuthService {
       token,
       user: toAuthUser(user),
     };
+  }
+
+  async authenticateWithGoogle(profile: GoogleUserProfile): Promise<AuthResponse> {
+    if (!profile.emailVerified) {
+      throw new AuthError("GOOGLE_AUTH_FAILED", "Google email is not verified", 401);
+    }
+
+    const email = profile.email.trim().toLowerCase();
+    let user = await this.repository.findByGoogleId(profile.sub);
+
+    if (!user) {
+      const existingByEmail = await this.repository.findByEmail(email);
+      if (existingByEmail) {
+        if (existingByEmail.googleId && existingByEmail.googleId !== profile.sub) {
+          throw new AuthError(
+            "EMAIL_TAKEN",
+            "An account with this email is already linked to another Google account",
+            409
+          );
+        }
+        user = await this.repository.linkGoogleAccount(existingByEmail.id, profile.sub);
+      } else {
+        const username = await this.generateUniqueUsername(profile);
+        try {
+          user = await this.repository.createUser({
+            email,
+            username,
+            passwordHash: null,
+            googleId: profile.sub,
+          });
+        } catch (err) {
+          const uniqueErr = isPgUniqueViolation(err);
+          if (uniqueErr) {
+            throw new AuthError("EMAIL_TAKEN", "An account with this email already exists", 409);
+          }
+          throw err;
+        }
+      }
+    }
+
+    const token = signAuthToken(
+      {
+        sub: user.id,
+        username: user.username,
+        email: user.email,
+      },
+      this.jwtSecret
+    );
+
+    return {
+      token,
+      user: toAuthUser(user),
+    };
+  }
+
+  private async generateUniqueUsername(profile: GoogleUserProfile): Promise<string> {
+    const rawSource = profile.name?.trim() || profile.email.split("@")[0] || "paw_cat";
+    const sanitized = rawSource
+      .replace(/[^a-zA-Z0-9_-]+/g, "_")
+      .replace(/^[_-]+|[_-]+$/g, "");
+    const base = sanitized.length >= 3 ? sanitized.slice(0, 24) : "paw_cat";
+
+    if (!(await this.repository.findByUsername(base))) {
+      return base;
+    }
+
+    const prefix = base.slice(0, 19);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate = `${prefix}_${randomBytes(2).toString("hex")}`;
+      if (!(await this.repository.findByUsername(candidate))) {
+        return candidate;
+      }
+    }
+
+    return `cat_${randomBytes(4).toString("hex")}`;
   }
 
   async getCurrentUser(token: string): Promise<AuthUser> {

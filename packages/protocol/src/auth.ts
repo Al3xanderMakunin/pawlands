@@ -40,6 +40,8 @@ export const AuthErrorCodeSchema = z.enum([
   "USERNAME_TAKEN",
   "INVALID_CREDENTIALS",
   "UNAUTHORIZED",
+  "GOOGLE_AUTH_NOT_CONFIGURED",
+  "GOOGLE_AUTH_FAILED",
   "INTERNAL_ERROR",
 ]);
 

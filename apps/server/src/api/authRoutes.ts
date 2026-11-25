@@ -1,6 +1,20 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { LoginRequestSchema, RegisterRequestSchema } from "@pawlands/protocol";
 import { AuthError, type AuthService } from "../auth/authService.js";
+import {
+  buildGoogleAuthUrl,
+  createGoogleStateToken,
+  verifyGoogleStateToken,
+  type GoogleOAuthClient,
+  type GoogleOAuthConfig,
+} from "../auth/googleOAuth.js";
+
+export interface AuthRoutesOptions {
+  jwtSecret: string;
+  appUrl: string;
+  googleOAuthConfig: GoogleOAuthConfig | null;
+  googleOAuthClient: GoogleOAuthClient;
+}
 
 function extractBearerToken(request: FastifyRequest): string | null {
   const authHeader = request.headers.authorization;
@@ -29,7 +43,8 @@ function handleAuthRouteError(err: unknown, reply: FastifyReply, request: Fastif
 
 export async function registerAuthRoutes(
   fastify: FastifyInstance,
-  authService: AuthService
+  authService: AuthService,
+  options: AuthRoutesOptions
 ): Promise<void> {
   fastify.post("/api/v1/auth/register", async (request, reply) => {
     const parsed = RegisterRequestSchema.safeParse(request.body);
@@ -86,5 +101,58 @@ export async function registerAuthRoutes(
 
   fastify.post("/api/v1/auth/logout", async (_request, reply) => {
     return reply.code(200).send({ ok: true });
+  });
+
+  fastify.get("/api/v1/auth/google", async (_request, reply) => {
+    if (!options.googleOAuthConfig) {
+      return reply.code(503).send({
+        error: "GOOGLE_AUTH_NOT_CONFIGURED",
+        message: "Google authentication is not configured on this server",
+      });
+    }
+
+    const state = createGoogleStateToken(options.jwtSecret);
+    const authUrl = buildGoogleAuthUrl(options.googleOAuthConfig, state);
+    return reply.redirect(authUrl);
+  });
+
+  fastify.get("/api/v1/auth/google/callback", async (request, reply) => {
+    const query = (request.query ?? {}) as {
+      code?: string;
+      state?: string;
+      error?: string;
+    };
+
+    const redirectWithFragment = (params: Record<string, string>) => {
+      const fragment = new URLSearchParams(params).toString();
+      return reply.redirect(`${options.appUrl}/#${fragment}`);
+    };
+
+    if (query.error) {
+      return redirectWithFragment({ auth_error: "GOOGLE_AUTH_FAILED" });
+    }
+
+    if (!options.googleOAuthConfig) {
+      return redirectWithFragment({ auth_error: "GOOGLE_AUTH_NOT_CONFIGURED" });
+    }
+
+    if (!query.code || !query.state || !verifyGoogleStateToken(query.state, options.jwtSecret)) {
+      return redirectWithFragment({ auth_error: "GOOGLE_AUTH_FAILED" });
+    }
+
+    try {
+      const profile = await options.googleOAuthClient.exchangeCodeForProfile(
+        query.code,
+        options.googleOAuthConfig
+      );
+      const result = await authService.authenticateWithGoogle(profile);
+      return redirectWithFragment({ auth_token: result.token });
+    } catch (err) {
+      if (err instanceof AuthError) {
+        return redirectWithFragment({ auth_error: err.code });
+      }
+      request.log.error(err, "Google OAuth callback error");
+      return redirectWithFragment({ auth_error: "GOOGLE_AUTH_FAILED" });
+    }
   });
 }

@@ -57,4 +57,30 @@ test.describe("Authentication & Registration", () => {
     await page.getByRole("button", { name: "Sign Out" }).last().click();
     await expect(page.getByRole("button", { name: "Sign in or Register" })).toBeVisible();
   });
+
+  test("shows Google sign-in button and restores session from OAuth callback fragment", async ({
+    page,
+  }) => {
+    const mockGoogleUser = {
+      id: "22222222-2222-4222-8222-222222222222",
+      email: "mittens@example.com",
+      username: "Mittens_Cat",
+      createdAt: "2026-11-25T10:00:00.000Z",
+    };
+
+    await page.route("**/api/v1/auth/me", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ user: mockGoogleUser }),
+      });
+    });
+
+    await page.goto("/#auth_token=mock-google-jwt");
+    await expect(page.getByText("@Mittens_Cat").first()).toBeVisible();
+
+    await page.getByRole("button", { name: "Sign Out" }).last().click();
+    await page.getByRole("button", { name: "Sign in or Register" }).click();
+    await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
+  });
 });

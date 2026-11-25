@@ -14,6 +14,8 @@ Pawlands uses **Colyseus** over **WebSocket** for real-time gameplay and **Fasti
    - `POST /api/v1/auth/login` (`LoginRequestSchema`: `{ identifier, password }`) -> `200 { token, user }`
    - `GET /api/v1/auth/me` (`Authorization: Bearer <token>`) -> `200 { user }`
    - `POST /api/v1/auth/logout` -> `200 { ok: true }`
+   - `GET /api/v1/auth/google` -> `302` redirect to Google OAuth 2.0 consent screen (or `503 GOOGLE_AUTH_NOT_CONFIGURED`)
+   - `GET /api/v1/auth/google/callback` -> exchanges authorization code, creates/links account, and redirects to `APP_URL/#auth_token=<jwt>` (or `#auth_error=<code>`)
 2. Client requests to join a `ZoneRoom` (`roomName = "zone"`) with `{ zoneId, name, archetype, token }` validated by `JoinZoneOptionsSchema`.
 3. `ZoneRoom.onAuth` verifies the optional session token and attaches the authenticated user claims before spawning the player entity in `ZoneState`.
 

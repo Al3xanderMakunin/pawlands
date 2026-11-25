@@ -4,12 +4,22 @@ import { WORLD_ZONES } from "@pawlands/game-data";
 import { registerAuthRoutes } from "./api/authRoutes.js";
 import { DrizzleAuthRepository, type AuthRepository } from "./auth/authRepository.js";
 import { AuthService } from "./auth/authService.js";
+import {
+  FetchGoogleOAuthClient,
+  resolveAppUrl,
+  resolveGoogleOAuthConfig,
+  type GoogleOAuthClient,
+  type GoogleOAuthConfig,
+} from "./auth/googleOAuth.js";
 import { resolveJwtSecret } from "./auth/jwt.js";
 
 export interface CreateAppOptions {
   authRepository?: AuthRepository;
   jwtSecret?: string;
   corsOrigin?: string | boolean;
+  appUrl?: string;
+  googleOAuthConfig?: GoogleOAuthConfig | null;
+  googleOAuthClient?: GoogleOAuthClient;
   logger?: boolean;
 }
 
@@ -33,8 +43,19 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const authRepository = options.authRepository ?? new DrizzleAuthRepository();
   const jwtSecret = options.jwtSecret ?? resolveJwtSecret();
   const authService = new AuthService(authRepository, jwtSecret);
+  const googleOAuthConfig =
+    options.googleOAuthConfig === undefined
+      ? resolveGoogleOAuthConfig()
+      : options.googleOAuthConfig;
+  const googleOAuthClient = options.googleOAuthClient ?? new FetchGoogleOAuthClient();
+  const appUrl = resolveAppUrl(options.appUrl);
 
-  await registerAuthRoutes(fastify, authService);
+  await registerAuthRoutes(fastify, authService, {
+    jwtSecret,
+    appUrl,
+    googleOAuthConfig,
+    googleOAuthClient,
+  });
 
   return fastify;
 }

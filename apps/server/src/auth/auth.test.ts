@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../app.js";
 import type { AuthRepository, CreateUserInput, UserRecord } from "./authRepository.js";
+import type { GoogleOAuthClient, GoogleOAuthConfig, GoogleUserProfile } from "./googleOAuth.js";
 import { signAuthToken, verifyAuthToken } from "./jwt.js";
 import { hashPassword, verifyPassword } from "./password.js";
 
@@ -18,6 +19,10 @@ class InMemoryAuthRepository implements AuthRepository {
     return this.users.find((u) => u.username.toLowerCase() === normalized) ?? null;
   }
 
+  async findByGoogleId(googleId: string): Promise<UserRecord | null> {
+    return this.users.find((u) => u.googleId === googleId) ?? null;
+  }
+
   async findById(id: string): Promise<UserRecord | null> {
     return this.users.find((u) => u.id === id) ?? null;
   }
@@ -28,12 +33,23 @@ class InMemoryAuthRepository implements AuthRepository {
       id: randomUUID(),
       email: input.email.trim().toLowerCase(),
       username: input.username.trim(),
-      passwordHash: input.passwordHash,
+      passwordHash: input.passwordHash ?? null,
+      googleId: input.googleId ?? null,
       createdAt: now,
       updatedAt: now,
     };
     this.users.push(record);
     return record;
+  }
+
+  async linkGoogleAccount(userId: string, googleId: string): Promise<UserRecord> {
+    const user = this.users.find((u) => u.id === userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    user.googleId = googleId;
+    user.updatedAt = new Date();
+    return user;
   }
 }
 
@@ -175,6 +191,141 @@ describe("auth HTTP routes", () => {
         url: "/api/v1/auth/me",
       });
       expect(unauthRes.statusCode).toBe(401);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("returns 503 when Google OAuth is not configured", async () => {
+    const app = await createApp({
+      authRepository: new InMemoryAuthRepository(),
+      jwtSecret: "test-route-secret",
+      googleOAuthConfig: null,
+      logger: false,
+    });
+
+    try {
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/google",
+      });
+      expect(res.statusCode).toBe(503);
+      expect(res.json().error).toBe("GOOGLE_AUTH_NOT_CONFIGURED");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("redirects to Google, registers new Google users, and links existing email accounts", async () => {
+    const repo = new InMemoryAuthRepository();
+    const googleConfig: GoogleOAuthConfig = {
+      clientId: "google-client-id",
+      clientSecret: "google-client-secret",
+      redirectUri: "http://localhost:2567/api/v1/auth/google/callback",
+    };
+
+    let nextProfile: GoogleUserProfile = {
+      sub: "google-sub-1",
+      email: "Mittens@Example.com",
+      emailVerified: true,
+      name: "Mittens Cat!",
+    };
+
+    const mockGoogleClient: GoogleOAuthClient = {
+      async exchangeCodeForProfile(code) {
+        expect(code).toBe("valid-code");
+        return nextProfile;
+      },
+    };
+
+    const app = await createApp({
+      authRepository: repo,
+      jwtSecret: "test-google-secret",
+      appUrl: "http://localhost:5173",
+      googleOAuthConfig: googleConfig,
+      googleOAuthClient: mockGoogleClient,
+      logger: false,
+    });
+
+    try {
+      // 1. Start Google OAuth redirect
+      const startRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/google",
+      });
+      expect(startRes.statusCode).toBe(302);
+      const location = startRes.headers.location;
+      expect(location).toBeTypeOf("string");
+      const redirectUrl = new URL(location as string);
+      expect(redirectUrl.origin).toBe("https://accounts.google.com");
+      const state = redirectUrl.searchParams.get("state");
+      expect(state).toBeTruthy();
+
+      // 2. Callback creates new user and redirects with #auth_token=...
+      const callbackRes = await app.inject({
+        method: "GET",
+        url: `/api/v1/auth/google/callback?code=valid-code&state=${encodeURIComponent(state!)}`,
+      });
+      expect(callbackRes.statusCode).toBe(302);
+      const appRedirect = new URL(callbackRes.headers.location as string);
+      expect(appRedirect.origin).toBe("http://localhost:5173");
+      const hashParams = new URLSearchParams(appRedirect.hash.slice(1));
+      const token = hashParams.get("auth_token");
+      expect(token).toBeTruthy();
+
+      const meRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/me",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(meRes.statusCode).toBe(200);
+      expect(meRes.json().user.email).toBe("mittens@example.com");
+      expect(meRes.json().user.username).toBe("Mittens_Cat");
+
+      // 3. Invalid state redirects with auth_error
+      const badStateRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/google/callback?code=valid-code&state=invalid.state",
+      });
+      expect(badStateRes.statusCode).toBe(302);
+      expect(badStateRes.headers.location).toContain("#auth_error=GOOGLE_AUTH_FAILED");
+
+      // 4. Existing password user with same email gets linked on Google sign-in
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: {
+          email: "existing@pawlands.gg",
+          username: "ExistingCat",
+          password: "password123",
+        },
+      });
+
+      nextProfile = {
+        sub: "google-sub-2",
+        email: "existing@pawlands.gg",
+        emailVerified: true,
+        name: "Existing Cat",
+      };
+
+      const startRes2 = await app.inject({ method: "GET", url: "/api/v1/auth/google" });
+      const state2 = new URL(startRes2.headers.location as string).searchParams.get("state")!;
+      const linkCallbackRes = await app.inject({
+        method: "GET",
+        url: `/api/v1/auth/google/callback?code=valid-code&state=${encodeURIComponent(state2)}`,
+      });
+      expect(linkCallbackRes.statusCode).toBe(302);
+      const linkedToken = new URLSearchParams(
+        new URL(linkCallbackRes.headers.location as string).hash.slice(1)
+      ).get("auth_token");
+
+      const linkedMeRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/me",
+        headers: { authorization: `Bearer ${linkedToken}` },
+      });
+      expect(linkedMeRes.statusCode).toBe(200);
+      expect(linkedMeRes.json().user.username).toBe("ExistingCat");
     } finally {
       await app.close();
     }
