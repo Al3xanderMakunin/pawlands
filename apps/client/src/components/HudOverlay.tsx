@@ -48,7 +48,7 @@ export function HudOverlay() {
   const satPct = Math.round((survival.satiety / survival.maxSatiety) * 100);
 
   return (
-    <header className="pointer-events-none absolute top-3 left-3 right-3 z-10 flex flex-wrap items-start justify-between gap-2">
+    <header className="pointer-events-none absolute top-[max(0.75rem,env(safe-area-inset-top))] left-[max(0.75rem,env(safe-area-inset-left))] right-[max(0.75rem,env(safe-area-inset-right))] z-10 flex flex-wrap items-start justify-between gap-2">
       {/* Survival & Zone Card */}
       <div className="pointer-events-auto rounded-xl border border-slate-700/80 bg-slate-900/85 px-3.5 py-2.5 shadow-lg backdrop-blur">
         <div className="flex flex-wrap items-center gap-2">

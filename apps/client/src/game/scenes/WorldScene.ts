@@ -2,18 +2,17 @@ import Phaser from "phaser";
 import { BASE_MOVEMENT_SPEED_PX_PER_SEC } from "@pawlands/config";
 import { ARCHETYPES } from "@pawlands/game-data";
 import { calculateEncumbrance, calculateSurvivalModifiers } from "@pawlands/shared";
-import { useGameStore, type TouchControlsMode } from "../../stores/useGameStore";
+import { useGameStore } from "../../stores/useGameStore";
 import i18n from "../../i18n";
 import { PlayerEntity } from "../entities/PlayerEntity";
 import { KeyboardInput } from "../input/KeyboardInput";
 import { MouseInput } from "../input/MouseInput";
-import { TouchControls } from "../input/TouchControls";
+import type { TouchControlsScene } from "./TouchControlsScene";
 
 export class WorldScene extends Phaser.Scene {
   private player!: PlayerEntity;
   private keyboardInput!: KeyboardInput;
   private mouseInput!: MouseInput;
-  private touchControls!: TouchControls;
   private unsubscribeStore: (() => void) | null = null;
   private actionClearTimer: Phaser.Time.TimerEvent | null = null;
 
@@ -58,10 +57,11 @@ export class WorldScene extends Phaser.Scene {
       bounds: { width: map.widthInPixels, height: map.heightInPixels },
       canAcceptClick: () => !useGameStore.getState().isArchetypeModalOpen,
     });
-    this.touchControls = new TouchControls(
-      this,
-      this.shouldShowTouchControls(store.touchControlsMode, this.scale.width)
-    );
+
+    if (!this.scene.isActive("TouchControlsScene")) {
+      this.scene.launch("TouchControlsScene");
+    }
+    this.scene.bringToTop("TouchControlsScene");
 
     this.scale.on("resize", this.handleResize, this);
 
@@ -76,11 +76,6 @@ export class WorldScene extends Phaser.Scene {
       if (state.isArchetypeModalOpen && !prevState.isArchetypeModalOpen) {
         this.mouseInput.clear();
       }
-      if (state.touchControlsMode !== prevState.touchControlsMode) {
-        this.touchControls.setVisible(
-          this.shouldShowTouchControls(state.touchControlsMode, this.scale.width)
-        );
-      }
     });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -91,7 +86,6 @@ export class WorldScene extends Phaser.Scene {
       this.actionClearTimer = null;
       this.keyboardInput.destroy();
       this.mouseInput.destroy();
-      this.touchControls.destroy();
     });
   }
 
@@ -106,7 +100,14 @@ export class WorldScene extends Phaser.Scene {
     }
 
     const kb = this.keyboardInput.sample();
-    const touch = this.touchControls.sample();
+    const touchScene = this.scene.get("TouchControlsScene") as TouchControlsScene | undefined;
+    const touch = touchScene?.sample() ?? {
+      moveX: 0,
+      moveY: 0,
+      sprint: false,
+      attackJustPressed: false,
+      interactJustPressed: false,
+    };
 
     const hasTouchMove = Math.abs(touch.moveX) > 0.05 || Math.abs(touch.moveY) > 0.05;
     const hasKeyboardMove = kb.moveX !== 0 || kb.moveY !== 0;
@@ -163,20 +164,11 @@ export class WorldScene extends Phaser.Scene {
 
   private handleResize(gameSize: Phaser.Structs.Size): void {
     this.updateCameraZoom(gameSize.width);
-    this.touchControls.layout(gameSize.width, gameSize.height);
-    const mode = useGameStore.getState().touchControlsMode;
-    this.touchControls.setVisible(this.shouldShowTouchControls(mode, gameSize.width));
   }
 
   private updateCameraZoom(viewportWidth: number): void {
     const zoom = viewportWidth < 640 ? 1.5 : 2;
     this.cameras.main.setZoom(zoom);
-  }
-
-  private shouldShowTouchControls(mode: TouchControlsMode, viewportWidth: number): boolean {
-    if (mode === "on") return true;
-    if (mode === "off") return false;
-    return this.sys.game.device.input.touch || viewportWidth < 768;
   }
 
   private flashActionLabel(label: string): void {

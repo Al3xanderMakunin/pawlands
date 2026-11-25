@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { MovementInputState } from "./InputTypes";
+import { computeTouchControlsLayout, readSafeAreaInsets } from "./touchControlsLayout";
 
 export class TouchControls {
   private readonly scene: Phaser.Scene;
@@ -92,28 +93,24 @@ export class TouchControls {
   }
 
   public layout(width: number, height: number): void {
-    const padX = Math.max(76, Math.min(110, width * 0.14));
-    const padY = Math.max(76, Math.min(100, height * 0.18));
+    const pos = computeTouchControlsLayout(width, height, readSafeAreaInsets());
 
-    this.baseCenterX = padX;
-    this.baseCenterY = height - padY;
+    this.baseCenterX = pos.stickX;
+    this.baseCenterY = pos.stickY;
 
     this.baseCircle.setPosition(this.baseCenterX, this.baseCenterY);
     if (this.stickPointerId === null) {
       this.thumbCircle.setPosition(this.baseCenterX, this.baseCenterY);
     }
 
-    const rightX = width - padX;
-    const bottomY = height - padY;
+    this.attackBtn.setPosition(pos.attackX, pos.attackY);
+    this.attackLabel.setPosition(pos.attackX, pos.attackY);
 
-    this.attackBtn.setPosition(rightX, bottomY);
-    this.attackLabel.setPosition(rightX, bottomY);
+    this.interactBtn.setPosition(pos.interactX, pos.interactY);
+    this.interactLabel.setPosition(pos.interactX, pos.interactY);
 
-    this.interactBtn.setPosition(rightX - 64, bottomY + 14);
-    this.interactLabel.setPosition(rightX - 64, bottomY + 14);
-
-    this.sprintBtn.setPosition(rightX - 18, bottomY - 64);
-    this.sprintLabel.setPosition(rightX - 18, bottomY - 64);
+    this.sprintBtn.setPosition(pos.sprintX, pos.sprintY);
+    this.sprintLabel.setPosition(pos.sprintX, pos.sprintY);
   }
 
   public sample(): MovementInputState {
