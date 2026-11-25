@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { ARCHETYPE_LIST } from "@pawlands/game-data";
 import { useGameStore } from "../stores/useGameStore";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 
 export function ArchetypeSelectModal() {
   const { t } = useTranslation();
@@ -26,15 +27,18 @@ export function ArchetypeSelectModal() {
             <h2 className="mt-1 text-xl font-bold text-slate-100">{t("chooseArchetype")}</h2>
             <p className="mt-0.5 text-xs text-slate-400">{t("archetypeSubtitle")}</p>
           </div>
-          {hasEnteredWorld && (
-            <button
-              type="button"
-              onClick={() => setArchetypeModalOpen(false)}
-              className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-500"
-            >
-              {t("close")}
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            <LanguageSwitcher />
+            {hasEnteredWorld && (
+              <button
+                type="button"
+                onClick={() => setArchetypeModalOpen(false)}
+                className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-300 hover:border-slate-500"
+              >
+                {t("close")}
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -63,14 +67,18 @@ export function ArchetypeSelectModal() {
                     }}
                   />
                   <div>
-                    <div className="text-sm font-bold">{arch.label}</div>
+                    <div className="text-sm font-bold">
+                      {t(`archetypes.${arch.id}.label`, { defaultValue: arch.label })}
+                    </div>
                     <div className="text-[11px] font-medium text-amber-300/90">
                       {Math.round(arch.stats.speedMultiplier * 100)}% {t("speed")}
                     </div>
                   </div>
                 </div>
 
-                <p className="mt-2.5 text-xs leading-relaxed text-slate-400">{arch.tagline}</p>
+                <p className="mt-2.5 text-xs leading-relaxed text-slate-400">
+                  {t(`archetypes.${arch.id}.tagline`, { defaultValue: arch.tagline })}
+                </p>
 
                 <div className="mt-3 grid grid-cols-2 gap-1.5 border-t border-slate-700/60 pt-2.5 text-[11px] text-slate-300">
                   <span>HP: {arch.stats.maxHp}</span>
@@ -78,7 +86,7 @@ export function ArchetypeSelectModal() {
                   <span>STR: {arch.stats.strength}</span>
                   <span>AGI: {arch.stats.agility}</span>
                   <span className="col-span-2">
-                    {t("carry")}: {arch.stats.maxCarryWeightKg} kg
+                    {t("carry")}: {arch.stats.maxCarryWeightKg} {t("kg")}
                   </span>
                 </div>
               </button>

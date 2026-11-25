@@ -1,12 +1,19 @@
 import { useTranslation } from "react-i18next";
 import { ARCHETYPES, WORLD_ZONES } from "@pawlands/game-data";
 import { calculateEncumbrance, calculateSurvivalModifiers } from "@pawlands/shared";
-import { useGameStore, type TouchControlsMode } from "../stores/useGameStore";
+import { useGameStore, type ConnectionStatus, type TouchControlsMode } from "../stores/useGameStore";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 
 const NEXT_TOUCH_MODE: Record<TouchControlsMode, TouchControlsMode> = {
   auto: "on",
   on: "off",
   off: "auto",
+};
+
+const CONNECTION_STATUS_KEYS: Record<ConnectionStatus, string> = {
+  offline: "statusOffline",
+  connecting: "statusConnecting",
+  connected: "statusConnected",
 };
 
 export function HudOverlay() {
@@ -41,7 +48,7 @@ export function HudOverlay() {
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-sm font-bold tracking-wide text-amber-300">{t("title")}</h1>
           <span className="rounded bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-200">
-            {currentZone?.name}
+            {currentZone ? t(`zones.${currentZone.id}`, { defaultValue: currentZone.name }) : ""}
           </span>
           <span
             className={`rounded px-2 py-0.5 text-[11px] font-semibold ${
@@ -50,10 +57,10 @@ export function HudOverlay() {
                 : "bg-emerald-950/90 text-emerald-300"
             }`}
           >
-            {currentZone?.isPvpEnabled ? "PvP" : t("safeZone")}
+            {currentZone?.isPvpEnabled ? t("pvpZone") : t("safeZone")}
           </span>
           <span className="rounded bg-slate-800/90 px-2 py-0.5 text-[11px] text-slate-400">
-            {connectionStatus === "offline" ? t("statusOffline") : connectionStatus}
+            {t(CONNECTION_STATUS_KEYS[connectionStatus])}
           </span>
         </div>
 
@@ -95,11 +102,12 @@ export function HudOverlay() {
 
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 text-[11px] text-slate-400">
           <span>
-            {archetype.label} • {survivalMods.status}
+            {t(`archetypes.${archetype.id}.label`, { defaultValue: archetype.label })} •{" "}
+            {t(`survivalStatus.${survivalMods.status}`)}
           </span>
           <span>
-            {t("carry")}: {survival.currentWeightKg}/{survival.maxCarryWeightKg} kg (
-            {encumbrance.tier})
+            {t("carry")}: {survival.currentWeightKg}/{survival.maxCarryWeightKg} {t("kg")} (
+            {t(`encumbrance.${encumbrance.tier}`)})
           </span>
           {lastActionLabel && (
             <span className="font-semibold text-amber-300">{lastActionLabel}</span>
@@ -109,12 +117,13 @@ export function HudOverlay() {
 
       {/* Quick Actions */}
       <div className="pointer-events-auto flex items-center gap-2">
+        <LanguageSwitcher />
         <button
           type="button"
           onClick={() => setTouchControlsMode(NEXT_TOUCH_MODE[touchControlsMode])}
           className="rounded-lg border border-slate-700/80 bg-slate-900/85 px-2.5 py-1.5 text-xs font-medium text-slate-200 backdrop-blur hover:border-slate-500"
         >
-          {t("touchPad")}: {touchControlsMode.toUpperCase()}
+          {t("touchPad")}: {t(`touchMode.${touchControlsMode}`)}
         </button>
         <button
           type="button"

@@ -3,6 +3,7 @@ import { BASE_MOVEMENT_SPEED_PX_PER_SEC } from "@pawlands/config";
 import { ARCHETYPES } from "@pawlands/game-data";
 import { calculateEncumbrance, calculateSurvivalModifiers } from "@pawlands/shared";
 import { useGameStore, type TouchControlsMode } from "../../stores/useGameStore";
+import i18n from "../../i18n";
 import { PlayerEntity } from "../entities/PlayerEntity";
 import { KeyboardInput } from "../input/KeyboardInput";
 import { TouchControls } from "../input/TouchControls";
@@ -115,10 +116,10 @@ export class WorldScene extends Phaser.Scene {
 
     if (kb.attackJustPressed || touch.attackJustPressed) {
       this.player.playActionPulse("attack");
-      this.flashActionLabel("Attack!");
+      this.flashActionLabel(i18n.t("actions.attack"));
     } else if (kb.interactJustPressed || touch.interactJustPressed) {
       this.player.playActionPulse("interact");
-      this.flashActionLabel("Interact");
+      this.flashActionLabel(i18n.t("actions.interact"));
     }
   }
 
