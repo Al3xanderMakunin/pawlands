@@ -21,7 +21,7 @@ Pawlands uses **Colyseus** over **WebSocket** for real-time gameplay and **Fasti
    - `GET /api/v1/auth/google` -> `302` redirect to Google OAuth 2.0 consent screen (or `503 GOOGLE_AUTH_NOT_CONFIGURED`)
    - `GET /api/v1/auth/google/callback` -> exchanges authorization code, creates/links account, and redirects to `APP_URL/#auth_token=<jwt>` (or `#auth_error=<code>`)
 2. Client requests to join a `ZoneRoom` (`roomName = "zone"`) with `{ zoneId, name, archetype, token }` validated by `JoinZoneOptionsSchema`.
-3. `ZoneRoom.onAuth` rejects invalid options and expired tokens. When a token is supplied, the server loads the account and rejects missing or banned users. Guest sessions are supported.
+3. `ZoneRoom.onAuth` rejects invalid options and expired tokens. When a token is supplied, the server loads the account and rejects missing or banned users. Authenticated sessions load and periodically checkpoint their character in PostgreSQL. Guest sessions run in memory.
 4. Choose **Play online** to join the selected zone. Set `VITE_WS_URL` to the service origin that exposes both HTTP matchmaking and WebSocket upgrades. The offline entry path runs locally.
 
 ## 3. Protocol Contracts (`@pawlands/protocol`)
@@ -41,7 +41,7 @@ All client-to-server messages are parsed with **Zod** schemas before affecting s
 
 - **Synchronized `ZoneState`**:
   - `zoneId`: current zone identifier
-  - `players`: `MapSchema<PlayerState>` (`id`, `name`, `archetype`, `x`, `y`, `hp`, `maxHp`, `energy`, `maxEnergy`, `satiety`, `lastMoveSeq`)
+  - `players`: `MapSchema<PlayerState>` (`id`, `name`, `archetype`, `x`, `y`, `hp`, `maxHp`, `energy`, `maxEnergy`, `satiety`, `speedMultiplier`, `maxCarryWeightKg`, `lastMoveSeq`)
 - **Targeted Event Messages**:
   - `combat:hit`: visual hit confirmation, damage number, crit flag
   - `system:notice`: server notices (safe zone entered, overloaded, insufficient energy)

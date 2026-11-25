@@ -15,6 +15,7 @@ import { buildMinimapTerrain, type MinimapMarker } from "../minimap/minimapData"
 import type { TouchControlsScene } from "./TouchControlsScene";
 
 export class WorldScene extends Phaser.Scene {
+  private roomTransition: Promise<unknown> = Promise.resolve();
   private room: Awaited<ReturnType<typeof joinWorldZone>> | null = null;
   private remotePlayers = new Map<string, PlayerEntity>();
   private prediction!: MovementPrediction;
@@ -121,14 +122,16 @@ export class WorldScene extends Phaser.Scene {
         if (state.token !== previous.token) this.scene.restart();
       });
       this.events.once(Phaser.Scenes.Events.SHUTDOWN, unsubscribeAuth);
-      void joinWorldZone({
-        zoneId: store.currentZoneId,
-        archetype: store.selectedArchetype,
-        name: "Whisker",
-        token: token ?? undefined,
-      }).then((room) => {
+      this.roomTransition = this.roomTransition.then(async () => {
+        if (!active) return;
+        const room = await joinWorldZone({
+          zoneId: store.currentZoneId,
+          archetype: store.selectedArchetype,
+          name: "Whisker",
+          token: token ?? undefined,
+        });
         if (!active) {
-          void room.leave().catch(() => {});
+          await room.leave();
           return;
         }
         this.room = room;
@@ -152,7 +155,7 @@ export class WorldScene extends Phaser.Scene {
       this.unsubscribeStore = null;
       const room = this.room;
       this.room = null;
-      if (room) void room.leave().catch(() => {});
+      if (room) this.roomTransition = this.roomTransition.then(() => room.leave()).catch(() => {});
       this.clearRemotePlayers();
       useGameStore.getState().setConnectionStatus("offline");
       this.actionClearTimer?.remove(false);
@@ -250,11 +253,12 @@ export class WorldScene extends Phaser.Scene {
     const local = players.get(room.sessionId);
     if (local) {
       this.player.setArchetype(local.archetype);
+      useGameStore.getState().syncSurvival(local);
       if (room.connection.isOpen) {
         const position = this.prediction.update(
           local, { dx, dy, sprint }, delta,
           (wantsSprint) => movementSpeed(
-            ARCHETYPES[local.archetype].stats.speedMultiplier, local.satiety, local.energy, wantsSprint,
+            local.speedMultiplier ?? ARCHETYPES[local.archetype].stats.speedMultiplier, local.satiety, local.energy, wantsSprint,
           ),
           (input) => room.send(ClientMessage.MOVE, input),
         );

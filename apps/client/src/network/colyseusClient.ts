@@ -12,7 +12,12 @@ export interface WorldPlayer {
   archetype: CharacterArchetype;
   x: number;
   y: number;
+  hp: number;
+  maxHp: number;
   energy: number;
+  maxEnergy: number;
+  maxCarryWeightKg: number;
+  speedMultiplier: number;
   satiety: number;
   lastMoveSeq: number;
 }

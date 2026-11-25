@@ -25,6 +25,7 @@ interface GameStoreState {
   enterWorld: (online?: boolean) => void;
   setArchetypeModalOpen: (open: boolean) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
+  syncSurvival: (snapshot: Pick<SurvivalState, "hp" | "maxHp" | "energy" | "maxEnergy" | "satiety" | "maxCarryWeightKg">) => void;
   setTouchControlsMode: (mode: TouchControlsMode) => void;
   setLastActionLabel: (label: string | null) => void;
   toggleMinimap: () => void;
@@ -69,12 +70,21 @@ export const useGameStore = create<GameStoreState>((set) => ({
   enterWorld: (online = false) =>
     set((state) => ({
       online,
+      survival: createInitialSurvival(state.selectedArchetype),
       worldEntry: state.worldEntry + 1,
       hasEnteredWorld: true,
       isArchetypeModalOpen: false,
     })),
   setArchetypeModalOpen: (isArchetypeModalOpen) => set({ isArchetypeModalOpen }),
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
+  syncSurvival: ({ hp, maxHp, energy, maxEnergy, satiety, maxCarryWeightKg }) =>
+    set((state) => {
+      const { survival } = state;
+      if (survival.hp === hp && survival.maxHp === maxHp && survival.energy === energy &&
+        survival.maxEnergy === maxEnergy && survival.satiety === satiety &&
+        survival.maxCarryWeightKg === maxCarryWeightKg) return state;
+      return { survival: { ...survival, hp, maxHp, energy, maxEnergy, satiety, maxCarryWeightKg } };
+    }),
   setTouchControlsMode: (touchControlsMode) => set({ touchControlsMode }),
   setLastActionLabel: (lastActionLabel) => set({ lastActionLabel }),
   toggleMinimap: () => set((state) => ({ isMinimapOpen: !state.isMinimapOpen })),

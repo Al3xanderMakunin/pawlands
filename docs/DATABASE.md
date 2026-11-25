@@ -45,3 +45,11 @@ pnpm --filter @pawlands/server db:migrate
 ```
 
 On server startup/restart (`apps/server/src/index.ts`), `runMigrations()` automatically applies any pending SQL migrations from `apps/server/drizzle` under a PostgreSQL advisory lock before the HTTP/WebSocket server begins listening. Set `AUTO_MIGRATE=false` to disable automatic migrations on startup.
+
+## Multiplayer checkpoints
+
+An authenticated player loads the oldest character owned by their account for the selected archetype, or creates one on first entry. The account row lock serializes creation. The current server process permits one live session per account and archetype across all zone rooms.
+
+The server writes the character's coordinates, zone, health, energy, satiety, and gameplay stats in one transaction every ten seconds and on permanent room departure. Periodic and final writes are serialized. An interrupted connection keeps its room seat for the reconnect window. Guests and offline play have no PostgreSQL checkpoints.
+
+On entry to the saved zone, the room restores the position if the current Tiled collision map permits it. Selecting another zone or loading a blocked position uses the selected zone's spawn. Zone metadata is registered lazily when needed for the position foreign key, preserving existing administrator overrides.
