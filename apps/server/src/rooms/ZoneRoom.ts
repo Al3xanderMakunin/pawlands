@@ -6,15 +6,17 @@ import {
   MAX_PLAYERS_PER_ZONE,
   SERVER_TICK_INTERVAL_MS,
 } from "@pawlands/config";
-import { ARCHETYPES, WORLD_ZONES } from "@pawlands/game-data";
+import { ARCHETYPES } from "@pawlands/game-data";
 import {
   ClientMessage,
   JoinZoneOptionsSchema,
   MoveInputSchema,
   type MoveInput,
 } from "@pawlands/protocol";
-import { calculateSurvivalModifiers, clamp } from "@pawlands/shared";
-import { resolveJwtSecret, verifyAuthToken, type AuthTokenPayload } from "../auth/jwt.js";
+import { calculateSurvivalModifiers } from "@pawlands/shared";
+import { DrizzleAuthRepository } from "../auth/authRepository.js";
+import { getZoneTerrain } from "./zoneTerrain.js";
+import { resolveJwtSecret, verifyAuthToken } from "../auth/jwt.js";
 
 export class PlayerState extends Schema {
   @type("string") id = "";
@@ -34,20 +36,29 @@ export class ZoneState extends Schema {
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
 }
 
+interface ZoneAuth {
+  username?: string;
+}
+
 interface PendingInput {
   dx: number;
   dy: number;
   sprint: boolean;
+  seq: number;
+  expiresAt: number;
 }
+
+const authRepository = new DrizzleAuthRepository();
 
 export class ZoneRoom extends Room {
   override maxClients = MAX_PLAYERS_PER_ZONE;
   override state = new ZoneState();
+  private terrain!: ReturnType<typeof getZoneTerrain>;
   private pendingInputs = new Map<string, PendingInput>();
 
   override onCreate(options: unknown): void {
-    const parsed = JoinZoneOptionsSchema.safeParse(options ?? {});
-    const zoneId = parsed.success ? parsed.data.zoneId : DEFAULT_WORLD_ZONE_ID;
+    const { zoneId } = JoinZoneOptionsSchema.parse(options ?? {});
+    this.terrain = getZoneTerrain(zoneId);
     this.state.zoneId = zoneId;
 
     this.onMessage(ClientMessage.MOVE, (client, payload) => {
@@ -61,10 +72,13 @@ export class ZoneRoom extends Room {
     }, SERVER_TICK_INTERVAL_MS);
   }
 
-  override onAuth(_client: Client, options: unknown): AuthTokenPayload | null {
+  override async onAuth(_client: Client, options: unknown): Promise<ZoneAuth> {
     const parsed = JoinZoneOptionsSchema.safeParse(options ?? {});
-    if (!parsed.success || !parsed.data.token) {
-      return null;
+    if (!parsed.success || parsed.data.zoneId !== this.state.zoneId) {
+      throw new ServerError(400, "Invalid zone options");
+    }
+    if (!parsed.data.token) {
+      return {};
     }
 
     const payload = verifyAuthToken(parsed.data.token, resolveJwtSecret());
@@ -72,24 +86,22 @@ export class ZoneRoom extends Room {
       throw new ServerError(401, "Invalid or expired session token");
     }
 
-    return payload;
+    const user = await authRepository.findById(payload.sub);
+    if (!user || user.isBanned) throw new ServerError(403, "Account cannot join the zone");
+    return { username: user.username };
   }
 
-  override onJoin(client: Client, options: unknown, auth?: AuthTokenPayload | null): void {
-    const parsed = JoinZoneOptionsSchema.safeParse(options ?? {});
-    const joinData = parsed.success
-      ? parsed.data
-      : { zoneId: DEFAULT_WORLD_ZONE_ID, name: "Whisker", archetype: "cat" as const };
-
+  override onJoin(client: Client, options: unknown, auth?: ZoneAuth): void {
+    const joinData = JoinZoneOptionsSchema.parse(options ?? {});
     const archetypeDef = ARCHETYPES[joinData.archetype];
-    const zoneDef = WORLD_ZONES.find((zone) => zone.id === this.state.zoneId) ?? WORLD_ZONES[0];
+    const { spawn } = this.terrain;
 
     const player = new PlayerState();
     player.id = client.sessionId;
     player.name = auth?.username ?? joinData.name;
     player.archetype = archetypeDef.id;
-    player.x = zoneDef?.spawnX ?? 400;
-    player.y = zoneDef?.spawnY ?? 300;
+    player.x = spawn.x;
+    player.y = spawn.y;
     player.hp = archetypeDef.stats.maxHp;
     player.maxHp = archetypeDef.stats.maxHp;
     player.energy = archetypeDef.stats.maxEnergy;
@@ -97,7 +109,11 @@ export class ZoneRoom extends Room {
     player.satiety = archetypeDef.stats.maxSatiety;
 
     this.state.players.set(client.sessionId, player);
-    this.pendingInputs.set(client.sessionId, { dx: 0, dy: 0, sprint: false });
+  }
+
+  override onDrop(client: Client): void {
+    this.pendingInputs.delete(client.sessionId);
+    this.allowReconnection(client, 15);
   }
 
   override onLeave(client: Client): void {
@@ -106,17 +122,20 @@ export class ZoneRoom extends Room {
   }
 
   private handleMoveInput(sessionId: string, input: MoveInput): void {
+    const previous = this.pendingInputs.get(sessionId);
+    if (previous && input.seq <= previous.seq) return;
     const magnitude = Math.hypot(input.dx, input.dy);
     const dx = magnitude > 1 ? input.dx / magnitude : input.dx;
     const dy = magnitude > 1 ? input.dy / magnitude : input.dy;
-    this.pendingInputs.set(sessionId, { dx, dy, sprint: input.sprint });
+    this.pendingInputs.set(sessionId, { dx, dy, sprint: input.sprint, seq: input.seq, expiresAt: Date.now() + 250 });
   }
 
   private stepSimulation(deltaMs: number): void {
-    const dt = deltaMs / 1000;
+    const dt = Math.min(deltaMs, SERVER_TICK_INTERVAL_MS) / 1000;
+    const now = Date.now();
     this.state.players.forEach((player, sessionId) => {
       const input = this.pendingInputs.get(sessionId);
-      if (!input) return;
+      if (!input || input.expiresAt <= now) return;
 
       const archetypeKey =
         player.archetype === "tomcat" || player.archetype === "kitten"
@@ -132,8 +151,10 @@ export class ZoneRoom extends Room {
         survival.moveSpeedMultiplier *
         sprintBonus;
 
-      player.x = clamp(player.x + input.dx * speed * dt, 0, 2000);
-      player.y = clamp(player.y + input.dy * speed * dt, 0, 2000);
+      const x = player.x + input.dx * speed * dt;
+      const y = player.y + input.dy * speed * dt;
+      if (this.terrain.canOccupy(x, player.y)) player.x = x;
+      if (this.terrain.canOccupy(player.x, y)) player.y = y;
     });
   }
 }

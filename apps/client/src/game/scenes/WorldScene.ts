@@ -3,6 +3,9 @@ import { BASE_MOVEMENT_SPEED_PX_PER_SEC } from "@pawlands/config";
 import { ARCHETYPES } from "@pawlands/game-data";
 import { calculateEncumbrance, calculateSurvivalModifiers } from "@pawlands/shared";
 import { useGameStore } from "../../stores/useGameStore";
+import { ClientMessage } from "@pawlands/protocol";
+import { joinWorldZone, type WorldPlayer } from "../../network/colyseusClient";
+import { useAuthStore } from "../../stores/useAuthStore";
 import i18n from "../../i18n";
 import { PlayerEntity } from "../entities/PlayerEntity";
 import { KeyboardInput } from "../input/KeyboardInput";
@@ -11,6 +14,10 @@ import { buildMinimapTerrain, type MinimapMarker } from "../minimap/minimapData"
 import type { TouchControlsScene } from "./TouchControlsScene";
 
 export class WorldScene extends Phaser.Scene {
+  private room: Awaited<ReturnType<typeof joinWorldZone>> | null = null;
+  private remotePlayers = new Map<string, PlayerEntity>();
+  private lastInputAt = -Infinity;
+  private seq = 0;
   private player!: PlayerEntity;
   private keyboardInput!: KeyboardInput;
   private mouseInput!: MouseInput;
@@ -44,7 +51,7 @@ export class WorldScene extends Phaser.Scene {
 
     this.player = new PlayerEntity(this, spawnPoint.x, spawnPoint.y, store.selectedArchetype);
 
-    if (obstaclesLayer) {
+    if (obstaclesLayer && !store.online) {
       obstaclesLayer.setCollisionByExclusion([-1, 0]);
       this.physics.add.collider(this.player.sprite, obstaclesLayer);
     }
@@ -75,11 +82,14 @@ export class WorldScene extends Phaser.Scene {
     this.scale.on("resize", this.handleResize, this);
 
     this.unsubscribeStore = useGameStore.subscribe((state, prevState) => {
-      if (state.currentZoneId !== prevState.currentZoneId) {
+      if (
+        state.currentZoneId !== prevState.currentZoneId ||
+        (state.worldEntry !== prevState.worldEntry && (state.online || prevState.online))
+      ) {
         this.scene.restart();
         return;
       }
-      if (state.selectedArchetype !== prevState.selectedArchetype) {
+      if (!state.online && state.selectedArchetype !== prevState.selectedArchetype) {
         this.player.setArchetype(state.selectedArchetype);
       }
       if (state.isArchetypeModalOpen && !prevState.isArchetypeModalOpen) {
@@ -87,10 +97,55 @@ export class WorldScene extends Phaser.Scene {
       }
     });
 
+    let active = true;
+    if (store.online && !store.isArchetypeModalOpen) {
+      this.lastInputAt = -Infinity;
+      this.seq = 0;
+      store.setConnectionStatus("connecting");
+      const onDisconnected = () => {
+        if (!active) return;
+        this.room = null;
+        this.clearRemotePlayers();
+        useGameStore.setState({ connectionStatus: "offline", isArchetypeModalOpen: true });
+      };
+
+      const token = useAuthStore.getState().token;
+      const unsubscribeAuth = useAuthStore.subscribe((state, previous) => {
+        if (state.token !== previous.token) this.scene.restart();
+      });
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, unsubscribeAuth);
+      void joinWorldZone({
+        zoneId: store.currentZoneId,
+        archetype: store.selectedArchetype,
+        name: "Whisker",
+        token: token ?? undefined,
+      }).then((room) => {
+        if (!active) {
+          void room.leave().catch(() => {});
+          return;
+        }
+        this.room = room;
+        room.onDrop(() => {
+          if (active) store.setConnectionStatus("connecting");
+        });
+        room.onReconnect(() => {
+          if (active) store.setConnectionStatus("connected");
+        });
+        room.onLeave(onDisconnected);
+        store.setConnectionStatus("connected");
+      }).catch(onDisconnected);
+    }
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      active = false;
       this.scale.off("resize", this.handleResize, this);
       this.unsubscribeStore?.();
       this.unsubscribeStore = null;
+      const room = this.room;
+      this.room = null;
+      if (room) void room.leave().catch(() => {});
+      this.clearRemotePlayers();
+      useGameStore.getState().setConnectionStatus("offline");
       this.actionClearTimer?.remove(false);
       this.actionClearTimer = null;
       this.keyboardInput.destroy();
@@ -102,6 +157,12 @@ export class WorldScene extends Phaser.Scene {
     if (!this.player) return;
 
     const store = useGameStore.getState();
+    if (store.online && (!this.room || store.isArchetypeModalOpen)) {
+      this.mouseInput.clear();
+      this.updateOnlineWorld(_time, delta, 0, 0, false);
+      return;
+    }
+
     if (store.isArchetypeModalOpen && !store.hasEnteredWorld) {
       this.mouseInput.clear();
       this.player.updateMovement(0, 0, 0, false);
@@ -132,6 +193,11 @@ export class WorldScene extends Phaser.Scene {
     const moveX = hasTouchMove ? touch.moveX : hasKeyboardMove ? kb.moveX : mouse.moveX;
     const moveY = hasTouchMove ? touch.moveY : hasKeyboardMove ? kb.moveY : mouse.moveY;
 
+    if (store.online) {
+      this.updateOnlineWorld(_time, delta, moveX, moveY, kb.sprint || touch.sprint);
+      return;
+    }
+
     const archetypeStats = ARCHETYPES[this.player.getArchetype()].stats;
     const survivalMods = calculateSurvivalModifiers(store.survival.satiety);
     const encumbrance = calculateEncumbrance(
@@ -160,6 +226,53 @@ export class WorldScene extends Phaser.Scene {
       this.player.playActionPulse("interact");
       this.flashActionLabel(i18n.t("actions.interact"));
     }
+  }
+
+  private updateOnlineWorld(
+    time: number, delta: number, dx: number, dy: number, sprint: boolean
+  ): void {
+    const room = this.room;
+    if (!room) {
+      this.player.updateMovement(0, 0, 0, false);
+      return;
+    }
+    if (room.connection.isOpen && time - this.lastInputAt >= 50) {
+      this.lastInputAt = time;
+      room.send(ClientMessage.MOVE, { dx, dy, sprint, seq: this.seq++ });
+    }
+
+    const players = room.state?.players;
+    if (!players) return;
+    players.forEach((state, id) => {
+      let entity = id === room.sessionId ? this.player : this.remotePlayers.get(id);
+      if (!entity) {
+        entity = new PlayerEntity(this, state.x, state.y, state.archetype);
+        this.remotePlayers.set(id, entity);
+      }
+      entity.setArchetype(state.archetype);
+      this.renderNetworkPlayer(entity, state, delta);
+    });
+    for (const [id, entity] of this.remotePlayers) {
+      if (players.has(id)) continue;
+      entity.sprite.destroy();
+      this.remotePlayers.delete(id);
+    }
+    this.syncMinimapPlayer(time, false);
+  }
+
+  private renderNetworkPlayer(entity: PlayerEntity, state: WorldPlayer, delta: number): void {
+    const { sprite } = entity;
+    const dx = state.x - sprite.x;
+    const dy = state.y - sprite.y;
+    const distance = Math.hypot(dx, dy);
+    const blend = distance > 64 ? 1 : 1 - Math.exp(-delta / 48);
+    entity.updateMovement(dx, dy, 0, false);
+    sprite.setPosition(sprite.x + dx * blend, sprite.y + dy * blend);
+  }
+
+  private clearRemotePlayers(): void {
+    for (const entity of this.remotePlayers.values()) entity.sprite.destroy();
+    this.remotePlayers.clear();
   }
 
   private getTouchScene(): TouchControlsScene | undefined {

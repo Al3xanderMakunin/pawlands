@@ -1,3 +1,4 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { Server } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import {
@@ -19,15 +20,32 @@ async function bootstrap(): Promise<void> {
 
   const fastify = await createApp();
 
+  await fastify.ready();
+  // Install the Colyseus router without a competing Fastify request listener.
+  fastify.server.removeAllListeners("request");
   const gameServer = new Server({
+    greet: false,
     transport: new WebSocketTransport({
       server: fastify.server,
     }),
   });
 
-  gameServer.define(ZONE_ROOM_NAME, ZoneRoom);
+  gameServer.define(ZONE_ROOM_NAME, ZoneRoom).filterBy(["zoneId"]);
 
-  await fastify.listen({ port, host });
+  await gameServer.listen(port, host);
+  const [matchmaking] = fastify.server.listeners("request") as Array<
+    (req: IncomingMessage, res: ServerResponse) => void
+  >;
+  if (!matchmaking) throw new Error("Missing Colyseus matchmaking handler");
+
+  fastify.server.removeListener("request", matchmaking);
+  fastify.server.on("request", (req, res) => {
+    if (req.url?.startsWith("/matchmake/")) {
+      matchmaking(req, res);
+    } else {
+      fastify.routing(req, res);
+    }
+  });
   fastify.log.info(`Pawlands server listening on http://${host}:${port}`);
 }
 

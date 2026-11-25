@@ -11,6 +11,8 @@ export function ArchetypeSelectModal() {
   const isMobile = useIsMobile();
   const {
     selectedArchetype,
+    online,
+    connectionStatus,
     currentZoneId,
     hasEnteredWorld,
     isArchetypeModalOpen,
@@ -43,7 +45,7 @@ export function ArchetypeSelectModal() {
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <LanguageSwitcher />
-            {hasEnteredWorld && (
+            {hasEnteredWorld && !online && (
               <button
                 type="button"
                 onClick={() => setArchetypeModalOpen(false)}
@@ -192,9 +194,19 @@ export function ArchetypeSelectModal() {
           <p className="text-[11px] text-slate-400">
             {isMobile ? t("mobileControlsHint") : t("controlsHint")}
           </p>
+          {online && connectionStatus === "offline" && (
+            <p role="alert" className="w-full text-xs text-rose-300">{t("worldConnectionFailed")}</p>
+          )}
           <button
             type="button"
-            onClick={enterWorld}
+            onClick={() => enterWorld(true)}
+            className="w-full rounded-xl border border-amber-500 px-5 py-2.5 text-sm font-bold text-amber-300 sm:w-auto"
+          >
+            {t("enterOnline")}
+          </button>
+          <button
+            type="button"
+            onClick={() => enterWorld()}
             className="w-full rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-bold text-slate-950 transition hover:bg-amber-400 sm:w-auto"
           >
             {hasEnteredWorld

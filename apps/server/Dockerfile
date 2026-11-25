@@ -51,6 +51,8 @@ COPY --from=builder --chown=node:node /app/packages/shared/dist ./packages/share
 COPY --from=builder --chown=node:node /app/apps/server/dist ./apps/server/dist
 COPY --from=builder --chown=node:node /app/apps/server/drizzle ./apps/server/drizzle
 
+COPY --chown=node:node apps/client/public/assets/maps ./apps/client/public/assets/maps
+
 USER node
 EXPOSE 2567
 

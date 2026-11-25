@@ -7,6 +7,8 @@ export type ConnectionStatus = "offline" | "connecting" | "connected";
 export type TouchControlsMode = "auto" | "on" | "off";
 
 interface GameStoreState {
+  online: boolean;
+  worldEntry: number;
   selectedArchetype: CharacterArchetype;
   hasEnteredWorld: boolean;
   isArchetypeModalOpen: boolean;
@@ -20,7 +22,7 @@ interface GameStoreState {
   minimapPlayer: MinimapPlayerState | null;
   setArchetype: (archetype: CharacterArchetype) => void;
   setZoneId: (zoneId: ZoneId) => void;
-  enterWorld: () => void;
+  enterWorld: (online?: boolean) => void;
   setArchetypeModalOpen: (open: boolean) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
   setTouchControlsMode: (mode: TouchControlsMode) => void;
@@ -45,6 +47,8 @@ function createInitialSurvival(archetype: CharacterArchetype): SurvivalState {
 }
 
 export const useGameStore = create<GameStoreState>((set) => ({
+  online: false,
+  worldEntry: 0,
   selectedArchetype: "cat",
   hasEnteredWorld: false,
   isArchetypeModalOpen: true,
@@ -62,11 +66,13 @@ export const useGameStore = create<GameStoreState>((set) => ({
       survival: createInitialSurvival(archetype),
     }),
   setZoneId: (currentZoneId) => set({ currentZoneId }),
-  enterWorld: () =>
-    set({
+  enterWorld: (online = false) =>
+    set((state) => ({
+      online,
+      worldEntry: state.worldEntry + 1,
       hasEnteredWorld: true,
       isArchetypeModalOpen: false,
-    }),
+    })),
   setArchetypeModalOpen: (isArchetypeModalOpen) => set({ isArchetypeModalOpen }),
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
   setTouchControlsMode: (touchControlsMode) => set({ touchControlsMode }),
