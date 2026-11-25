@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+**/node_modules/
+.pnpm-store/
+
+# Build outputs
+**/dist/
+build/
+**/*.tsbuildinfo
+
+# Git & CI
+.git/
+.github/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Logs, caches, test artifacts
+*.log
+coverage/
+.turbo/
+.vite/
+playwright-report/
+test-results/

@@ -1,0 +1,104 @@
+name: Docker Images
+
+on:
+  workflow_call:
+    inputs:
+      version_tag:
+        description: "Release git tag (e.g. v0.2.0)"
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: "Optional version tag to build (defaults to ref name)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-${{ inputs.version_tag || github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Resolve Image Metadata
+    runs-on: ubuntu-latest
+    outputs:
+      repo_lower: ${{ steps.vars.outputs.repo_lower }}
+      version_tag: ${{ steps.vars.outputs.version_tag }}
+    steps:
+      - name: Compute lowercase repository and version tag
+        id: vars
+        env:
+          INPUT_TAG: ${{ inputs.version_tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          REF_NAME: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          repo_lower="$(printf '%s' "$REPO" | tr '[:upper:]' '[:lower:]')"
+          tag="${INPUT_TAG:-${RELEASE_TAG:-$REF_NAME}}"
+          echo "repo_lower=${repo_lower}" >> "$GITHUB_OUTPUT"
+          echo "version_tag=${tag}" >> "$GITHUB_OUTPUT"
+
+  build-and-push:
+    name: Build & Push (${{ matrix.app }})
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: server
+            dockerfile: apps/server/Dockerfile
+          - app: client
+            dockerfile: apps/client/Dockerfile
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.version_tag }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ needs.prepare.outputs.repo_lower }}-${{ matrix.app }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.prepare.outputs.version_tag }}
+            type=semver,pattern=v{{version}},value=${{ needs.prepare.outputs.version_tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.prepare.outputs.version_tag }}
+            type=raw,value=latest,enable=${{ startsWith(needs.prepare.outputs.version_tag, 'v') && !contains(needs.prepare.outputs.version_tag, '-') }}
+            type=raw,value=${{ needs.prepare.outputs.version_tag }},enable=${{ !startsWith(needs.prepare.outputs.version_tag, 'v') }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
