@@ -4,9 +4,8 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useAuthStore } from "../stores/useAuthStore";
 import { useGameStore } from "../stores/useGameStore";
 import { AnimatedModal } from "./AnimatedModal";
-import { LanguageSwitcher } from "./LanguageSwitcher";
 
-export function ArchetypeSelectModal() {
+export function ArchetypeSelectModal({ onOpenAccountSettings }: { onOpenAccountSettings: () => void }) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
   const {
@@ -44,7 +43,6 @@ export function ArchetypeSelectModal() {
             <p className="mt-0.5 text-xs text-slate-400">{t("archetypeSubtitle")}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <LanguageSwitcher />
             {hasEnteredWorld && !online && (
               <button
                 type="button"
@@ -84,6 +82,13 @@ export function ArchetypeSelectModal() {
               </button>
             </>
           )}
+          <button
+            type="button"
+            onClick={onOpenAccountSettings}
+            className="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:border-slate-500"
+          >
+            {t("accountSettings")}
+          </button>
         </div>
 
         <div className="mt-3 min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain pr-0.5 sm:mt-4 sm:pr-0">

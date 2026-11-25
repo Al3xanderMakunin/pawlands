@@ -5,7 +5,6 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useAdminStore } from "../stores/useAdminStore";
 import { useAuthStore } from "../stores/useAuthStore";
 import { useGameStore, type ConnectionStatus, type TouchControlsMode } from "../stores/useGameStore";
-import { LanguageSwitcher } from "./LanguageSwitcher";
 import { Minimap } from "./Minimap";
 
 const NEXT_TOUCH_MODE: Record<TouchControlsMode, TouchControlsMode> = {
@@ -20,7 +19,7 @@ const CONNECTION_STATUS_KEYS: Record<ConnectionStatus, string> = {
   connected: "statusConnected",
 };
 
-export function HudOverlay() {
+export function HudOverlay({ onOpenAccountSettings }: { onOpenAccountSettings: () => void }) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
   const {
@@ -125,7 +124,6 @@ export function HudOverlay() {
       {/* Quick Actions & Minimap */}
       <div className="flex flex-col items-end gap-2">
         <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-2">
-          <LanguageSwitcher />
           {user ? (
             <div className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-slate-900/85 px-2.5 py-1 text-xs text-emerald-200 backdrop-blur">
               <span className="font-semibold">@{user.username}</span>
@@ -155,6 +153,13 @@ export function HudOverlay() {
               {t("auth.signIn")}
             </button>
           )}
+          <button
+            type="button"
+            onClick={onOpenAccountSettings}
+            className="rounded-lg border border-slate-700/80 bg-slate-900/85 px-2.5 py-1.5 text-xs font-medium text-slate-200 backdrop-blur hover:border-slate-500"
+          >
+            {t("accountSettings")}
+          </button>
           {isMobile && (
             <button
               type="button"

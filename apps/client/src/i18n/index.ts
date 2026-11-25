@@ -38,6 +38,7 @@ export const resources = {
     translation: {
       title: "Pawlands",
       subtitle: "2D Pixel-Art Survival RPG",
+      accountSettings: "Account Settings",
       language: "Language",
       chooseArchetype: "Choose your feline",
       archetypeSubtitle: "Each archetype has distinct survival stats, carry capacity, and speed.",
@@ -241,6 +242,7 @@ export const resources = {
     translation: {
       title: "Pawlands",
       subtitle: "2D пиксель-арт RPG на выживание",
+      accountSettings: "Настройки аккаунта",
       language: "Язык",
       chooseArchetype: "Выберите своего кота",
       archetypeSubtitle:
