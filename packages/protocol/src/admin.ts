@@ -22,7 +22,7 @@ export const AdminStatsSchema = z.object({
 
 export const AdminUserSummarySchema = z.object({
   id: z.string().uuid(),
-  email: z.string().email(),
+  email: z.string().email().nullable(),
   username: z.string().min(3).max(24),
   role: UserRoleSchema,
   isBanned: z.boolean(),

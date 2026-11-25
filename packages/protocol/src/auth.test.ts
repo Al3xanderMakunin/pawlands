@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { LoginRequestSchema, RegisterRequestSchema } from "./auth.js";
+import {
+  LoginRequestSchema,
+  RegisterRequestSchema,
+  TelegramAuthRequestSchema,
+} from "./auth.js";
 
 describe("auth protocol schemas", () => {
   it("normalizes and validates a registration payload", () => {
@@ -44,6 +48,28 @@ describe("auth protocol schemas", () => {
       LoginRequestSchema.safeParse({
         identifier: "ab",
         password: "secret",
+      }).success
+    ).toBe(false);
+  });
+
+  it("validates Telegram login widget payload", () => {
+    const validHash = "a".repeat(64);
+    expect(
+      TelegramAuthRequestSchema.safeParse({
+        id: 123456789,
+        first_name: "Whisker",
+        username: "whisker_cat",
+        auth_date: 1700000000,
+        hash: validHash,
+      }).success
+    ).toBe(true);
+
+    expect(
+      TelegramAuthRequestSchema.safeParse({
+        id: 123456789,
+        first_name: "Whisker",
+        auth_date: 1700000000,
+        hash: "short-hash",
       }).success
     ).toBe(false);
   });

@@ -15,6 +15,7 @@ import {
   type GoogleOAuthConfig,
 } from "./auth/googleOAuth.js";
 import { resolveJwtSecret } from "./auth/jwt.js";
+import { resolveTelegramBotToken } from "./auth/telegram.js";
 import {
   resolveYandexOAuthConfig,
   YandexOAuthClient,
@@ -26,6 +27,7 @@ export interface CreateAppOptions {
   adminRepository?: AdminRepository;
   yandexOAuth?: YandexOAuthProvider;
   jwtSecret?: string;
+  telegramBotToken?: string;
   corsOrigin?: string | boolean;
   appUrl?: string;
   clientUrl?: string;
@@ -54,7 +56,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const authRepository = options.authRepository ?? new DrizzleAuthRepository();
   const adminRepository = options.adminRepository ?? new DrizzleAdminRepository();
   const jwtSecret = options.jwtSecret ?? resolveJwtSecret();
-  const authService = new AuthService(authRepository, jwtSecret);
+  const telegramBotToken = options.telegramBotToken ?? resolveTelegramBotToken();
+  const authService = new AuthService(authRepository, jwtSecret, telegramBotToken);
   const googleOAuthConfig =
     options.googleOAuthConfig === undefined
       ? resolveGoogleOAuthConfig()

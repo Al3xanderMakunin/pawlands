@@ -1,10 +1,11 @@
-import { randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../app.js";
 import type { AuthRepository, CreateUserInput, UserRecord } from "./authRepository.js";
 import type { GoogleOAuthClient, GoogleOAuthConfig, GoogleUserProfile } from "./googleOAuth.js";
 import { signAuthToken, verifyAuthToken } from "./jwt.js";
 import { hashPassword, verifyPassword } from "./password.js";
+import { verifyTelegramAuthPayload } from "./telegram.js";
 import {
   YandexOAuthClient,
   type YandexOAuthProvider,
@@ -28,6 +29,10 @@ class InMemoryAuthRepository implements AuthRepository {
     return this.users.find((u) => u.googleId === googleId) ?? null;
   }
 
+  async findByTelegramId(telegramId: string): Promise<UserRecord | null> {
+    return this.users.find((u) => u.telegramId === telegramId) ?? null;
+  }
+
   async findById(id: string): Promise<UserRecord | null> {
     return this.users.find((u) => u.id === id) ?? null;
   }
@@ -40,7 +45,7 @@ class InMemoryAuthRepository implements AuthRepository {
     const now = new Date();
     const record: UserRecord = {
       id: randomUUID(),
-      email: input.email.trim().toLowerCase(),
+      email: input.email ? input.email.trim().toLowerCase() : null,
       username: input.username.trim(),
       passwordHash: input.passwordHash ?? null,
       googleId: input.googleId ?? null,
@@ -48,6 +53,8 @@ class InMemoryAuthRepository implements AuthRepository {
       isBanned: false,
       banReason: null,
       yandexId: input.yandexId ?? null,
+      telegramId: input.telegramId ?? null,
+      telegramUsername: input.telegramUsername ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -108,6 +115,27 @@ class MockYandexOAuthProvider implements YandexOAuthProvider {
     }
     return profile;
   }
+}
+
+function signTelegramPayload(
+  fields: {
+    id: number;
+    first_name: string;
+    last_name?: string;
+    username?: string;
+    photo_url?: string;
+    auth_date: number;
+  },
+  botToken: string
+) {
+  const entries: Array<[string, string]> = Object.entries(fields)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => [key, String(value)]);
+  entries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const dataCheckString = entries.map(([k, v]) => `${k}=${v}`).join("\n");
+  const secretKey = createHash("sha256").update(botToken).digest();
+  const hash = createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
+  return { ...fields, hash };
 }
 
 describe("password hashing", () => {
@@ -595,6 +623,141 @@ describe("Yandex ID OAuth", () => {
       expect(meLinkedRes.statusCode).toBe(200);
       expect(meLinkedRes.json().user.id).toBe(existingUserId);
       expect(meLinkedRes.json().user.username).toBe("Whisker_01");
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe("telegram authentication", () => {
+  it("verifies valid Telegram Login Widget payloads and rejects tampered or expired ones", () => {
+    const botToken = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11";
+    const nowSec = 1_700_000_000;
+    const payload = signTelegramPayload(
+      {
+        id: 987654321,
+        first_name: "Whisker",
+        username: "whisker_cat",
+        auth_date: nowSec - 60,
+      },
+      botToken
+    );
+
+    expect(verifyTelegramAuthPayload(payload, botToken, 86400, nowSec)).toBe(true);
+    expect(verifyTelegramAuthPayload({ ...payload, first_name: "EvilCat" }, botToken, 86400, nowSec)).toBe(false);
+    expect(verifyTelegramAuthPayload(payload, "wrong-bot-token", 86400, nowSec)).toBe(false);
+    expect(verifyTelegramAuthPayload(payload, botToken, 30, nowSec)).toBe(false);
+  });
+
+  it("registers a new user on first Telegram login, logs in on subsequent calls, and resolves username collisions", async () => {
+    const botToken = "123456:telegram-test-bot-token";
+    const repo = new InMemoryAuthRepository();
+    const app = await createApp({
+      authRepository: repo,
+      jwtSecret: "test-route-secret",
+      telegramBotToken: botToken,
+      logger: false,
+    });
+
+    try {
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: {
+          email: "existing@pawlands.gg",
+          username: "whisker_cat",
+          password: "password123",
+        },
+      });
+
+      const nowSec = Math.floor(Date.now() / 1000);
+      const telegramPayload = signTelegramPayload(
+        {
+          id: 555000111,
+          first_name: "Whisker",
+          username: "whisker_cat",
+          auth_date: nowSec,
+        },
+        botToken
+      );
+
+      const firstRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/telegram",
+        payload: telegramPayload,
+      });
+      expect(firstRes.statusCode).toBe(200);
+      const firstBody = firstRes.json();
+      expect(firstBody.token).toBeTypeOf("string");
+      expect(firstBody.user.email).toBeNull();
+      expect(firstBody.user.telegramId).toBe("555000111");
+      expect(firstBody.user.username).toBe("whisker_cat_1");
+
+      const secondRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/telegram",
+        payload: telegramPayload,
+      });
+      expect(secondRes.statusCode).toBe(200);
+      expect(secondRes.json().user.id).toBe(firstBody.user.id);
+
+      const meRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/me",
+        headers: {
+          authorization: `Bearer ${firstBody.token}`,
+        },
+      });
+      expect(meRes.statusCode).toBe(200);
+      expect(meRes.json().user.telegramId).toBe("555000111");
+
+      const pwLoginRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: {
+          identifier: "whisker_cat_1",
+          password: "any-password",
+        },
+      });
+      expect(pwLoginRes.statusCode).toBe(401);
+      expect(pwLoginRes.json().error).toBe("INVALID_CREDENTIALS");
+
+      const badRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/telegram",
+        payload: {
+          ...telegramPayload,
+          first_name: "Tampered",
+        },
+      });
+      expect(badRes.statusCode).toBe(401);
+      expect(badRes.json().error).toBe("INVALID_TELEGRAM_AUTH");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("returns 503 when TELEGRAM_BOT_TOKEN is not configured", async () => {
+    const app = await createApp({
+      authRepository: new InMemoryAuthRepository(),
+      jwtSecret: "test-route-secret",
+      telegramBotToken: "",
+      logger: false,
+    });
+
+    try {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/telegram",
+        payload: {
+          id: 12345,
+          first_name: "Cat",
+          auth_date: Math.floor(Date.now() / 1000),
+          hash: "a".repeat(64),
+        },
+      });
+      expect(res.statusCode).toBe(503);
+      expect(res.json().error).toBe("TELEGRAM_NOT_CONFIGURED");
     } finally {
       await app.close();
     }

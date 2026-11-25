@@ -6,6 +6,7 @@ import {
   type AuthUser,
   type LoginRequest,
   type RegisterRequest,
+  type TelegramAuthRequest,
 } from "@pawlands/protocol";
 
 const apiUrl = (import.meta.env.VITE_API_URL ?? "http://localhost:2567").replace(/\/+$/, "");
@@ -80,6 +81,21 @@ export async function registerAccount(payload: RegisterRequest): Promise<AuthRes
 
 export async function loginAccount(payload: LoginRequest): Promise<AuthResponse> {
   const response = await requestJson("/api/v1/auth/login", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await parseErrorResponse(response);
+  }
+
+  return AuthResponseSchema.parse(await response.json());
+}
+
+export async function authenticateWithTelegram(
+  payload: TelegramAuthRequest
+): Promise<AuthResponse> {
+  const response = await requestJson("/api/v1/auth/telegram", {
     method: "POST",
     body: JSON.stringify(payload),
   });

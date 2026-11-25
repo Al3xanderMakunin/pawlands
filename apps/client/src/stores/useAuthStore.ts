@@ -2,13 +2,16 @@ import { create } from "zustand";
 import {
   AuthErrorCodeSchema,
   type AuthErrorCode,
+  type AuthResponse,
   type AuthUser,
   type LoginRequest,
   type RegisterRequest,
+  type TelegramAuthRequest,
 } from "@pawlands/protocol";
 import { useAdminStore } from "./useAdminStore";
 import {
   AuthApiError,
+  authenticateWithTelegram,
   fetchCurrentUser,
   getGoogleAuthUrl,
   loginAccount,
@@ -59,9 +62,33 @@ interface AuthStoreState {
   login: (payload: LoginRequest) => Promise<boolean>;
   register: (payload: RegisterRequest) => Promise<boolean>;
   startGoogleAuth: () => void;
+  loginWithTelegram: (payload: TelegramAuthRequest) => Promise<boolean>;
   logout: () => Promise<void>;
   restoreSession: () => Promise<void>;
   handleOAuthCallbackFromUrl: () => Promise<void>;
+}
+
+async function runAuthRequest(
+  set: (partial: Partial<AuthStoreState>) => void,
+  request: () => Promise<AuthResponse>
+): Promise<boolean> {
+  set({ isSubmitting: true, errorCode: null });
+  try {
+    const response = await request();
+    writeStoredToken(response.token);
+    set({
+      user: response.user,
+      token: response.token,
+      isSubmitting: false,
+      isAuthModalOpen: false,
+      errorCode: null,
+    });
+    return true;
+  } catch (err) {
+    const code = err instanceof AuthApiError ? err.code : "INTERNAL_ERROR";
+    set({ isSubmitting: false, errorCode: code });
+    return false;
+  }
 }
 
 export const useAuthStore = create<AuthStoreState>((set, get) => ({
@@ -96,45 +123,11 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
 
   clearError: () => set({ errorCode: null }),
 
-  login: async (payload) => {
-    set({ isSubmitting: true, errorCode: null });
-    try {
-      const response = await loginAccount(payload);
-      writeStoredToken(response.token);
-      set({
-        user: response.user,
-        token: response.token,
-        isSubmitting: false,
-        isAuthModalOpen: false,
-        errorCode: null,
-      });
-      return true;
-    } catch (err) {
-      const code = err instanceof AuthApiError ? err.code : "INTERNAL_ERROR";
-      set({ isSubmitting: false, errorCode: code });
-      return false;
-    }
-  },
+  login: (payload) => runAuthRequest(set, () => loginAccount(payload)),
 
-  register: async (payload) => {
-    set({ isSubmitting: true, errorCode: null });
-    try {
-      const response = await registerAccount(payload);
-      writeStoredToken(response.token);
-      set({
-        user: response.user,
-        token: response.token,
-        isSubmitting: false,
-        isAuthModalOpen: false,
-        errorCode: null,
-      });
-      return true;
-    } catch (err) {
-      const code = err instanceof AuthApiError ? err.code : "INTERNAL_ERROR";
-      set({ isSubmitting: false, errorCode: code });
-      return false;
-    }
-  },
+  register: (payload) => runAuthRequest(set, () => registerAccount(payload)),
+
+  loginWithTelegram: (payload) => runAuthRequest(set, () => authenticateWithTelegram(payload)),
 
   startGoogleAuth: () => {
     if (typeof window === "undefined") return;

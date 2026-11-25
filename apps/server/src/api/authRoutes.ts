@@ -1,5 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { LoginRequestSchema, RegisterRequestSchema } from "@pawlands/protocol";
+import {
+  LoginRequestSchema,
+  RegisterRequestSchema,
+  TelegramAuthRequestSchema,
+} from "@pawlands/protocol";
 import { AuthError, type AuthService } from "../auth/authService.js";
 import {
   buildGoogleAuthUrl,
@@ -81,6 +85,24 @@ export async function registerAuthRoutes(
 
     try {
       const result = await authService.login(parsed.data);
+      return reply.code(200).send(result);
+    } catch (err) {
+      return handleAuthRouteError(err, reply, request);
+    }
+  });
+
+  fastify.post("/api/v1/auth/telegram", async (request, reply) => {
+    const parsed = TelegramAuthRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "VALIDATION_ERROR",
+        message: "Invalid Telegram authentication payload",
+        details: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    try {
+      const result = await authService.authenticateWithTelegram(parsed.data);
       return reply.code(200).send(result);
     } catch (err) {
       return handleAuthRouteError(err, reply, request);

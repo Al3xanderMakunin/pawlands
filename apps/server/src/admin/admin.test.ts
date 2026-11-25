@@ -42,6 +42,10 @@ class InMemoryStore implements AuthRepository, AdminRepository {
     return this.users.find((u) => u.yandexId === yandexId) ?? null;
   }
 
+  async findByTelegramId(telegramId: string): Promise<UserRecord | null> {
+    return this.users.find((u) => u.telegramId === telegramId) ?? null;
+  }
+
   async findById(id: string): Promise<UserRecord | null> {
     return this.users.find((u) => u.id === id) ?? null;
   }
@@ -50,7 +54,7 @@ class InMemoryStore implements AuthRepository, AdminRepository {
     const now = new Date();
     const record: UserRecord = {
       id: randomUUID(),
-      email: input.email.trim().toLowerCase(),
+      email: input.email ? input.email.trim().toLowerCase() : null,
       username: input.username.trim(),
       passwordHash: input.passwordHash ?? null,
       googleId: input.googleId ?? null,
@@ -58,6 +62,8 @@ class InMemoryStore implements AuthRepository, AdminRepository {
       role: input.role ?? "player",
       isBanned: false,
       banReason: null,
+      telegramId: input.telegramId ?? null,
+      telegramUsername: input.telegramUsername ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -112,7 +118,7 @@ class InMemoryStore implements AuthRepository, AdminRepository {
     if (query.search) {
       const q = query.search.toLowerCase();
       filtered = filtered.filter(
-        (u) => u.username.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+        (u) => u.username.toLowerCase().includes(q) || (u.email?.toLowerCase().includes(q) ?? false)
       );
     }
     if (query.role) {

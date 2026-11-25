@@ -5,12 +5,14 @@ import type {
   AuthUser,
   LoginRequest,
   RegisterRequest,
+  TelegramAuthRequest,
   UserRole,
 } from "@pawlands/protocol";
 import type { AuthRepository, UserRecord } from "./authRepository.js";
 import type { GoogleUserProfile } from "./googleOAuth.js";
 import { signAuthToken, verifyAuthToken } from "./jwt.js";
 import { hashPassword, verifyPassword } from "./password.js";
+import { verifyTelegramAuthPayload } from "./telegram.js";
 import type { YandexUserProfile } from "./yandexOAuth.js";
 
 export class AuthError extends Error {
@@ -32,6 +34,7 @@ function toAuthUser(record: UserRecord): AuthUser {
     username: record.username,
     role: record.role,
     isBanned: record.isBanned,
+    telegramId: record.telegramId,
     createdAt: record.createdAt.toISOString(),
   };
 }
@@ -62,6 +65,15 @@ function sanitizeUsernameBase(raw: string): string {
   return "yandex_cat";
 }
 
+function buildTelegramUsernameBase(input: TelegramAuthRequest): string {
+  const raw = (input.username || input.first_name || "").replace(/[^a-zA-Z0-9_-]/g, "");
+  if (raw.length >= 3) {
+    return raw.slice(0, 18);
+  }
+  const fallback = `tg_${input.id}`;
+  return fallback.slice(0, 18);
+}
+
 function isPgUniqueViolation(err: unknown): { constraint?: string } | null {
   if (typeof err !== "object" || err === null) return null;
   const record = err as { code?: unknown; constraint?: unknown };
@@ -76,8 +88,27 @@ function isPgUniqueViolation(err: unknown): { constraint?: string } | null {
 export class AuthService {
   constructor(
     private readonly repository: AuthRepository,
-    private readonly jwtSecret: string
+    private readonly jwtSecret: string,
+    private readonly telegramBotToken?: string
   ) {}
+
+  private async resolveUniqueTelegramUsername(input: TelegramAuthRequest): Promise<string> {
+    const base = buildTelegramUsernameBase(input);
+    const firstMatch = await this.repository.findByUsername(base);
+    if (!firstMatch) {
+      return base;
+    }
+
+    for (let suffix = 1; suffix <= 999; suffix += 1) {
+      const candidate = `${base.slice(0, 23 - String(suffix).length)}_${suffix}`;
+      const existing = await this.repository.findByUsername(candidate);
+      if (!existing) {
+        return candidate;
+      }
+    }
+
+    return `tg_${String(input.id).slice(-12)}_${Date.now().toString(36).slice(-4)}`.slice(0, 24);
+  }
 
   async register(input: RegisterRequest): Promise<AuthResponse> {
     const email = input.email.trim().toLowerCase();
@@ -115,20 +146,7 @@ export class AuthService {
       throw err;
     }
 
-    const token = signAuthToken(
-      {
-        sub: created.id,
-        username: created.username,
-        email: created.email,
-        role: created.role,
-      },
-      this.jwtSecret
-    );
-
-    return {
-      token,
-      user: toAuthUser(created),
-    };
+    return this.buildAuthResponse(created);
   }
 
   async login(input: LoginRequest): Promise<AuthResponse> {
@@ -266,6 +284,61 @@ export class AuthService {
       token,
       user: toAuthUser(user),
     };
+  }
+
+  async authenticateWithTelegram(input: TelegramAuthRequest): Promise<AuthResponse> {
+    if (!this.telegramBotToken) {
+      throw new AuthError("TELEGRAM_NOT_CONFIGURED", "Telegram authentication is not configured", 503);
+    }
+
+    if (!verifyTelegramAuthPayload(input, this.telegramBotToken)) {
+      throw new AuthError("INVALID_TELEGRAM_AUTH", "Invalid or expired Telegram authentication data", 401);
+    }
+
+    const telegramId = String(input.id);
+    const existing = await this.repository.findByTelegramId(telegramId);
+    if (existing) {
+      if (existing.isBanned) {
+        throw new AuthError(
+          "ACCOUNT_BANNED",
+          existing.banReason ? `Account is banned: ${existing.banReason}` : "Account is banned",
+          403
+        );
+      }
+      return this.buildAuthResponse(existing);
+    }
+
+    const username = await this.resolveUniqueTelegramUsername(input);
+    let created: UserRecord;
+    try {
+      created = await this.repository.createUser({
+        email: null,
+        username,
+        passwordHash: null,
+        telegramId,
+        telegramUsername: input.username ?? null,
+      });
+    } catch (err) {
+      const uniqueErr = isPgUniqueViolation(err);
+      if (uniqueErr) {
+        const raced = await this.repository.findByTelegramId(telegramId);
+        if (raced) {
+          return this.buildAuthResponse(raced);
+        }
+        const fallbackUsername = `tg_${telegramId.slice(-10)}_${Date.now().toString(36).slice(-4)}`.slice(0, 24);
+        created = await this.repository.createUser({
+          email: null,
+          username: fallbackUsername,
+          passwordHash: null,
+          telegramId,
+          telegramUsername: input.username ?? null,
+        });
+      } else {
+        throw err;
+      }
+    }
+
+    return this.buildAuthResponse(created);
   }
 
   async authenticateWithGoogle(profile: GoogleUserProfile): Promise<AuthResponse> {

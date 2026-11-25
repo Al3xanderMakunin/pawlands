@@ -365,7 +365,9 @@ export function AdminPanelModal() {
                                 {t("admin.users.charactersCount", { count: entry.characterCount })}
                               </span>
                             </div>
-                            <p className="mt-0.5 truncate text-xs text-slate-400">{entry.email}</p>
+                            <p className="mt-0.5 truncate text-xs text-slate-400">
+                              {entry.email ?? "—"}
+                            </p>
                             {entry.isBanned && entry.banReason && (
                               <p className="mt-1 text-[11px] text-rose-300">
                                 {t("admin.users.banReasonPrefix")}: {entry.banReason}

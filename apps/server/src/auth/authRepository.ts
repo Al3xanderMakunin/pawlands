@@ -5,7 +5,7 @@ import { users } from "../database/schema.js";
 
 export interface UserRecord {
   id: string;
-  email: string;
+  email: string | null;
   username: string;
   passwordHash: string | null;
   googleId: string | null;
@@ -13,17 +13,21 @@ export interface UserRecord {
   isBanned: boolean;
   banReason: string | null;
   yandexId: string | null;
+  telegramId: string | null;
+  telegramUsername: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface CreateUserInput {
-  email: string;
+  email?: string | null;
   username: string;
   passwordHash?: string | null;
   googleId?: string | null;
   role?: UserRole;
   yandexId?: string | null;
+  telegramId?: string | null;
+  telegramUsername?: string | null;
 }
 
 function normalizeRole(role: string): UserRole {
@@ -44,6 +48,8 @@ function toUserRecord(row: typeof users.$inferSelect): UserRecord {
     role: normalizeRole(row.role),
     isBanned: row.isBanned,
     banReason: row.banReason ?? null,
+    telegramId: row.telegramId ?? null,
+    telegramUsername: row.telegramUsername ?? null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -53,6 +59,7 @@ export interface AuthRepository {
   findByEmail(email: string): Promise<UserRecord | null>;
   findByUsername(username: string): Promise<UserRecord | null>;
   findByGoogleId(googleId: string): Promise<UserRecord | null>;
+  findByTelegramId(telegramId: string): Promise<UserRecord | null>;
   findById(id: string): Promise<UserRecord | null>;
   findByYandexId(yandexId: string): Promise<UserRecord | null>;
   createUser(input: CreateUserInput): Promise<UserRecord>;
@@ -104,16 +111,27 @@ export class DrizzleAuthRepository implements AuthRepository {
     return row ? toUserRecord(row) : null;
   }
 
+  async findByTelegramId(telegramId: string): Promise<UserRecord | null> {
+    const [row] = await db
+      .select()
+      .from(users)
+      .where(eq(users.telegramId, telegramId))
+      .limit(1);
+    return row ? toUserRecord(row) : null;
+  }
+
   async createUser(input: CreateUserInput): Promise<UserRecord> {
     const [created] = await db
       .insert(users)
       .values({
-        email: input.email.trim().toLowerCase(),
+        email: input.email ? input.email.trim().toLowerCase() : null,
         username: input.username.trim(),
         passwordHash: input.passwordHash ?? null,
         googleId: input.googleId ?? null,
         role: input.role ?? "player",
         yandexId: input.yandexId ?? null,
+        telegramId: input.telegramId ?? null,
+        telegramUsername: input.telegramUsername ?? null,
       })
       .returning();
 

@@ -10,7 +10,7 @@ import {
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
-  email: text("email").notNull().unique(),
+  email: text("email").unique(),
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash"),
   googleId: text("google_id").unique(),
@@ -18,6 +18,8 @@ export const users = pgTable("users", {
   isBanned: boolean("is_banned").default(false).notNull(),
   banReason: text("ban_reason"),
   yandexId: text("yandex_id").unique(),
+  telegramId: text("telegram_id").unique(),
+  telegramUsername: text("telegram_username"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

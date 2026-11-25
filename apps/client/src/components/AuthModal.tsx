@@ -1,9 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { LoginRequestSchema, RegisterRequestSchema } from "@pawlands/protocol";
+import {
+  LoginRequestSchema,
+  RegisterRequestSchema,
+  TelegramAuthRequestSchema,
+} from "@pawlands/protocol";
 import { getYandexAuthUrl } from "../network/authClient";
 import { useAuthStore } from "../stores/useAuthStore";
 import { AnimatedModal } from "./AnimatedModal";
+import { TelegramLoginButton } from "./TelegramLoginButton";
 
 export function AuthModal() {
   const { t } = useTranslation();
@@ -19,6 +24,7 @@ export function AuthModal() {
     login,
     register,
     startGoogleAuth,
+    loginWithTelegram,
   } = useAuthStore();
 
   const [identifier, setIdentifier] = useState("");
@@ -79,6 +85,16 @@ export function AuthModal() {
     if (ok) {
       setPassword("");
     }
+  };
+
+  const handleTelegramAuth = async (rawUser: unknown) => {
+    clearError();
+    const parsed = TelegramAuthRequestSchema.safeParse(rawUser);
+    if (!parsed.success) {
+      setErrorCode("INVALID_TELEGRAM_AUTH");
+      return;
+    }
+    await loginWithTelegram(parsed.data);
   };
 
   return (
@@ -308,6 +324,8 @@ export function AuthModal() {
             </span>
             <span>{isRegister ? t("auth.yandexRegister") : t("auth.yandexLogin")}</span>
           </a>
+
+          <TelegramLoginButton onAuth={handleTelegramAuth} disabled={isSubmitting} />
         </div>
     </AnimatedModal>
   );

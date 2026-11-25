@@ -4,7 +4,7 @@ import type { UserRole } from "@pawlands/protocol";
 export interface AuthTokenClaims {
   sub: string;
   username: string;
-  email: string;
+  email: string | null;
   role?: UserRole;
 }
 
@@ -93,7 +93,7 @@ export function verifyAuthToken(token: string, secret: string): AuthTokenPayload
     if (
       typeof payload.sub !== "string" ||
       typeof payload.username !== "string" ||
-      typeof payload.email !== "string" ||
+      (payload.email !== null && typeof payload.email !== "string") ||
       typeof payload.iat !== "number" ||
       typeof payload.exp !== "number"
     ) {
