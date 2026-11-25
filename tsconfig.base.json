@@ -11,6 +11,12 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "@pawlands/config": ["./packages/config/src/index.ts"],
+      "@pawlands/shared": ["./packages/shared/src/index.ts"],
+      "@pawlands/game-data": ["./packages/game-data/src/index.ts"],
+      "@pawlands/protocol": ["./packages/protocol/src/index.ts"]
+    }
   }
 }
