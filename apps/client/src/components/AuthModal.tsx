@@ -104,9 +104,9 @@ export function AuthModal() {
       isOpen={isAuthModalOpen}
       ariaLabelledBy="auth-modal-title"
       backdropClassName="z-30 bg-slate-950/80 p-4"
-      panelClassName="w-full max-w-md rounded-2xl border border-slate-700/90 bg-slate-900/95 p-6 shadow-2xl"
+      panelClassName="flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-700/90 bg-slate-900/95 p-5 shadow-2xl sm:p-6"
     >
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex shrink-0 items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-amber-400">
               {t("title")}
@@ -127,7 +127,7 @@ export function AuthModal() {
           </button>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl border border-slate-800 bg-slate-950/70 p-1">
+        <div className="mt-4 grid shrink-0 grid-cols-2 gap-2 rounded-xl border border-slate-800 bg-slate-950/70 p-1">
           <button
             type="button"
             onClick={() => handleModeSwitch("login")}
@@ -152,7 +152,8 @@ export function AuthModal() {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+        <div className="mt-4 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+          <form onSubmit={handleSubmit} className="space-y-3">
           {isRegister ? (
             <>
               <div>
@@ -360,6 +361,7 @@ export function AuthModal() {
             </svg>
             <span>{t("auth.vkLoginButton")}</span>
           </button>
+        </div>
         </div>
     </AnimatedModal>
   );
