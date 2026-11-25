@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <rect width="16" height="16" rx="3" fill="#131722" />
+  <rect x="0.5" y="0.5" width="15" height="15" rx="2.5" fill="none" stroke="#273047" stroke-width="1" />
+  <!-- Middle-left toe -->
+  <path fill="#fef3c7" d="M5 2h1v1h1v2H6v1H5V5H4V3h1z" />
+  <rect x="5" y="3" width="1" height="2" fill="#fb7185" />
+  <!-- Middle-right toe -->
+  <path fill="#fef3c7" d="M10 2h1v1h1v2h-1v1h-1V5H9V3h1z" />
+  <rect x="10" y="3" width="1" height="2" fill="#fb7185" />
+  <!-- Outer-left toe -->
+  <path fill="#fef3c7" d="M2 5h1v1h1v2H3v1H2V8H1V6h1z" />
+  <rect x="2" y="6" width="1" height="2" fill="#fb7185" />
+  <!-- Outer-right toe -->
+  <path fill="#fef3c7" d="M13 5h1v1h1v2h-1v1h-1V8h-1V6h1z" />
+  <rect x="13" y="6" width="1" height="2" fill="#fb7185" />
+  <!-- Main pad fur -->
+  <path fill="#fef3c7" d="M6 6h4v1h2v1h1v4h-1v1h-1v1H5v-1H4v-1H3V8h1V7h2z" />
+  <!-- Main pad bean -->
+  <path fill="#fb7185" d="M6 8h4v1h2v3h-2v1H6v-1H4V9h2z" />
+</svg>
