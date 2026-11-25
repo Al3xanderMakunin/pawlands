@@ -4,6 +4,13 @@ All notable changes to **Pawlands** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0](https://github.com/Al3xanderMakunin/pawlands/compare/v1.0.0...v1.1.0) (2026-11-25)
+
+
+### Features
+
+* **client:** implement Stage 1 Game Core ([6b92b44](https://github.com/Al3xanderMakunin/pawlands/commit/6b92b4452392e1250f3f5e7b2e261c6740d39892))
+
 ## [1.0.0](https://github.com/Al3xanderMakunin/pawlands/compare/v0.1.0...v1.0.0) (2026-11-25)
 
 
