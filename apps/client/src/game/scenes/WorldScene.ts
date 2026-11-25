@@ -1,9 +1,9 @@
 import Phaser from "phaser";
 import { BASE_MOVEMENT_SPEED_PX_PER_SEC } from "@pawlands/config";
 import { ARCHETYPES } from "@pawlands/game-data";
-import { calculateEncumbrance, calculateSurvivalModifiers, createPlayerCollision, movementSpeed } from "@pawlands/shared";
+import { calculateEncumbrance, calculateSurvivalModifiers, canSprint, createPlayerCollision, movementSpeed } from "@pawlands/shared";
 import { useGameStore } from "../../stores/useGameStore";
-import { ClientMessage } from "@pawlands/protocol";
+import { CharacterSheetSchema, ClientMessage, ServerMessage } from "@pawlands/protocol";
 import { joinWorldZone, type WorldPlayer } from "../../network/colyseusClient";
 import { useAuthStore } from "../../stores/useAuthStore";
 import i18n from "../../i18n";
@@ -114,7 +114,9 @@ export class WorldScene extends Phaser.Scene {
         if (!active) return;
         this.room = null;
         this.clearRemotePlayers();
-        useGameStore.setState({ connectionStatus: "offline", isArchetypeModalOpen: true });
+        useGameStore.setState({
+          connectionStatus: "offline", isArchetypeModalOpen: true, characterSheet: null, backpackAction: null,
+        });
       };
 
       const token = useAuthStore.getState().token;
@@ -135,13 +137,27 @@ export class WorldScene extends Phaser.Scene {
           return;
         }
         this.room = room;
+        room.onMessage(ServerMessage.CHARACTER_SHEET, (payload: unknown) => {
+          const result = CharacterSheetSchema.safeParse(payload);
+          if (active && result.success) useGameStore.setState({ characterSheet: result.data });
+        });
+        useGameStore.setState({
+          backpackAction: (slot, equip) => {
+            if (active && room.connection.isOpen) {
+              room.send(equip ? ClientMessage.EQUIP_ITEM : ClientMessage.USE_ITEM, { slot });
+            }
+          },
+        });
+        room.send(ClientMessage.CHARACTER_SHEET, {});
         room.onDrop(() => {
           if (!active) return;
           this.prediction.reset();
           store.setConnectionStatus("connecting");
         });
         room.onReconnect(() => {
-          if (active) store.setConnectionStatus("connected");
+          if (!active) return;
+          room.send(ClientMessage.CHARACTER_SHEET, {});
+          store.setConnectionStatus("connected");
         });
         room.onLeave(onDisconnected);
         store.setConnectionStatus("connected");
@@ -157,7 +173,7 @@ export class WorldScene extends Phaser.Scene {
       this.room = null;
       if (room) this.roomTransition = this.roomTransition.then(() => room.leave()).catch(() => {});
       this.clearRemotePlayers();
-      useGameStore.getState().setConnectionStatus("offline");
+      useGameStore.setState({ connectionStatus: "offline", characterSheet: null, backpackAction: null });
       this.actionClearTimer?.remove(false);
       this.actionClearTimer = null;
       this.keyboardInput.destroy();
@@ -254,17 +270,19 @@ export class WorldScene extends Phaser.Scene {
     if (local) {
       this.player.setArchetype(local.archetype);
       useGameStore.getState().syncSurvival(local);
-      if (room.connection.isOpen) {
+      if (room.connection.isOpen && local.hp > 0) {
         const position = this.prediction.update(
           local, { dx, dy, sprint }, delta,
           (wantsSprint) => movementSpeed(
             local.speedMultiplier ?? ARCHETYPES[local.archetype].stats.speedMultiplier, local.satiety, local.energy, wantsSprint,
+            local.currentWeightKg, local.maxCarryWeightKg,
           ),
           (input) => room.send(ClientMessage.MOVE, input),
         );
-        this.player.updateMovement(dx, dy, 0, sprint && local.energy > 0);
+        this.player.updateMovement(dx, dy, 0, sprint && canSprint(local.energy, local.currentWeightKg, local.maxCarryWeightKg));
         this.player.sprite.setPosition(position.x, position.y);
       } else {
+        this.prediction.reset();
         this.player.updateMovement(0, 0, 0, false);
         this.player.sprite.setPosition(local.x, local.y);
       }

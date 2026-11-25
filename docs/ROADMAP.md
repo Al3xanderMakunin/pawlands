@@ -18,13 +18,13 @@ Progress target: **6 stages / 30 milestones** leading to a public multiplayer Al
 - [x] Graceful reconnection on mobile/desktop network drops
 - [x] Periodic persistence of character stats and last known zone position
 
-## Stage 3: Survival & RPG Systems (0 / 5)
+## Stage 3: Survival & RPG Systems (5 / 5)
 
-- [ ] Live Health, Energy, and Hunger (Satiety) simulation loop
-- [ ] Backpack inventory slots and real-time carry weight calculation
-- [ ] Equipping weapons, armor, and accessories with stat modifiers
-- [ ] Internal coin wallet and transactional audit ledger
-- [ ] Experience points (XP), leveling up, and stat progression
+- [x] Live Health, Energy, and Hunger (Satiety) simulation loop
+- [x] Backpack inventory slots and real-time carry weight calculation
+- [x] Equipping weapons, armor, and accessories with stat modifiers
+- [x] Internal coin wallet and transactional audit ledger
+- [x] Experience points (XP), leveling up, and stat progression
 
 ## Stage 4: PvP & PvE Combat (0 / 5)
 

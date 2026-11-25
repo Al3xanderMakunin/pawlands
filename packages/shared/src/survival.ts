@@ -1,5 +1,5 @@
 import { STARVATION_HP_DRAIN_PER_SEC } from "@pawlands/config";
-import type { EncumbranceState, SurvivalModifiers } from "./types.js";
+import type { EncumbranceState, SurvivalModifiers, SurvivalState } from "./types.js";
 
 /**
  * Clamp a numeric value to [min, max].
@@ -98,5 +98,29 @@ export function calculateEncumbrance(
     moveSpeedMultiplier: 0.5,
     energyCostMultiplier: 1.6,
     canSprint: false,
+  };
+}
+
+export function canSprint(energy: number, weightKg: number, maxWeightKg: number): boolean {
+  return energy >= 1 && calculateEncumbrance(weightKg, maxWeightKg).canSprint;
+}
+
+export function stepSurvival(
+  state: Pick<SurvivalState, "hp" | "energy" | "maxEnergy" | "satiety">,
+  seconds: number,
+  sprinting: boolean,
+  restingInSettlement: boolean,
+  energyCostMultiplier: number,
+) {
+  if (state.hp <= 0) return { hp: 0, energy: state.energy, satiety: state.satiety };
+
+  const modifiers = calculateSurvivalModifiers(state.satiety);
+  const decay = sprinting ? 0.3 : restingInSettlement ? 0.05 : 0.1;
+  const energyRate = sprinting ? -12 * energyCostMultiplier : 8 * modifiers.energyRegenMultiplier;
+  const starvationSeconds = Math.max(0, seconds - state.satiety / decay);
+  return {
+    hp: Math.max(0, state.hp - starvationSeconds * STARVATION_HP_DRAIN_PER_SEC),
+    energy: clamp(state.energy + energyRate * seconds, 0, state.maxEnergy),
+    satiety: Math.max(0, state.satiety - decay * seconds),
   };
 }

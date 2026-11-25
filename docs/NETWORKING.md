@@ -35,14 +35,17 @@ All client-to-server messages are parsed with **Zod** schemas before affecting s
 | `input:move` | `MoveInputSchema` | Directional vector (`dx`, `dy` clamped `[-1, 1]`), `sprint` boolean, monotonic `seq`. |
 | `input:attack` | `AttackInputSchema` | Attack aim angle (`aimX`, `aimY`) and optional `targetId`. |
 | `input:interact` | `InteractInputSchema` | Interact with NPC, loot container, resource node, or zone portal (`targetId`). |
-| `input:use_item` | `UseItemInputSchema` | Use consumable/quick-slot item (`slotIndex`). |
+| `input:use_item` | `BackpackActionSchema` | Consume the item in backpack `slot` (0–11). |
+| `input:equip_item` | `BackpackActionSchema` | Toggle equipment for the item in backpack `slot` (0–11). |
+| `input:character_sheet` | `CharacterSheetRequestSchema` | Empty object requesting the current sheet after join or reconnection. |
 
 ### 3.2 Server -> Client Messages & Schema State
 
 - **Synchronized `ZoneState`**:
   - `zoneId`: current zone identifier
-  - `players`: `MapSchema<PlayerState>` (`id`, `name`, `archetype`, `x`, `y`, `hp`, `maxHp`, `energy`, `maxEnergy`, `satiety`, `speedMultiplier`, `maxCarryWeightKg`, `lastMoveSeq`)
+  - `players`: `MapSchema<PlayerState>` (`id`, `name`, `archetype`, `x`, `y`, `hp`, `maxHp`, `energy`, `maxEnergy`, `satiety`, `speedMultiplier`, `currentWeightKg`, `maxCarryWeightKg`, `lastMoveSeq`)
 - **Targeted Event Messages**:
+  - `character:sheet`: level, XP, coin balance, strength, agility, gear bonuses, and backpack stacks. The room sends it only to the owning client on request, after item actions, when the displayed XP or level changes, and when a wallet credit commits.
   - `combat:hit`: visual hit confirmation, damage number, crit flag
   - `system:notice`: server notices (safe zone entered, overloaded, insufficient energy)
   - `zone:transfer`: instructs client to smoothly reconnect into an adjacent `ZoneRoom`

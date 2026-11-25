@@ -1,13 +1,17 @@
+import { BACKPACK_SLOTS } from "@pawlands/shared";
 import { z } from "zod";
 
 export const ClientMessage = {
+  CHARACTER_SHEET: "input:character_sheet",
   MOVE: "input:move",
   ATTACK: "input:attack",
   INTERACT: "input:interact",
+  EQUIP_ITEM: "input:equip_item",
   USE_ITEM: "input:use_item",
 } as const;
 
 export const ServerMessage = {
+  CHARACTER_SHEET: "character:sheet",
   COMBAT_HIT: "combat:hit",
   SYSTEM_NOTICE: "system:notice",
   ZONE_TRANSFER: "zone:transfer",
@@ -51,3 +55,24 @@ export type MoveInput = z.infer<typeof MoveInputSchema>;
 export type AttackInput = z.infer<typeof AttackInputSchema>;
 export type InteractInput = z.infer<typeof InteractInputSchema>;
 export type JoinZoneOptions = z.infer<typeof JoinZoneOptionsSchema>;
+
+export const CharacterSheetRequestSchema = z.object({}).strict();
+
+export const BackpackActionSchema = z.object({ slot: z.number().int().nonnegative().max(BACKPACK_SLOTS - 1) });
+
+export const CharacterSheetSchema = z.object({
+  level: z.number().int().positive(),
+  xp: z.number().nonnegative(),
+  coins: z.number().int().nonnegative(),
+  strength: z.number().int().nonnegative(),
+  agility: z.number().int().nonnegative(),
+  attackPower: z.number().nonnegative(),
+  defense: z.number().nonnegative(),
+  backpack: z.array(z.object({
+    itemId: z.string(),
+    quantity: z.number().int().positive(),
+    equipped: z.boolean(),
+  }).nullable()).length(BACKPACK_SLOTS),
+});
+
+export type CharacterSheet = z.infer<typeof CharacterSheetSchema>;

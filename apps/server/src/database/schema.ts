@@ -1,6 +1,9 @@
+import type { Backpack } from "@pawlands/game-data";
 import {
   boolean,
+  doublePrecision,
   integer,
+  jsonb,
   pgTable,
   real,
   text,
@@ -34,7 +37,8 @@ export const characters = pgTable("characters", {
   name: text("name").notNull().unique(),
   archetype: text("archetype").notNull(),
   level: integer("level").default(1).notNull(),
-  xp: integer("xp").default(0).notNull(),
+  xp: doublePrecision("xp").default(0).notNull(),
+  backpack: jsonb("backpack").$type<Backpack>(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -42,11 +46,11 @@ export const characterStats = pgTable("character_stats", {
   characterId: uuid("character_id")
     .primaryKey()
     .references(() => characters.id, { onDelete: "cascade" }),
-  hp: integer("hp").notNull(),
+  hp: doublePrecision("hp").notNull(),
   maxHp: integer("max_hp").notNull(),
-  energy: integer("energy").notNull(),
+  energy: doublePrecision("energy").notNull(),
   maxEnergy: integer("max_energy").notNull(),
-  satiety: integer("satiety").default(100).notNull(),
+  satiety: doublePrecision("satiety").default(100).notNull(),
   strength: integer("strength").notNull(),
   agility: integer("agility").notNull(),
   speedMultiplier: real("speed_multiplier").default(1).notNull(),
@@ -80,4 +84,16 @@ export const wallets = pgTable("wallets", {
     .references(() => characters.id, { onDelete: "cascade" }),
   coins: integer("coins").default(0).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const walletTransactions = pgTable("wallet_transactions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  characterId: uuid("character_id")
+    .notNull()
+    .references(() => wallets.characterId, { onDelete: "cascade" }),
+  delta: integer("delta").notNull(),
+  balanceAfter: integer("balance_after").notNull(),
+  reason: text("reason").notNull(),
+  referenceId: text("reference_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });

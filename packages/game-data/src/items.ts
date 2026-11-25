@@ -1,4 +1,4 @@
-import type { EquipmentSlotType, ItemCategory } from "@pawlands/shared";
+import { BACKPACK_SLOTS, type EquipmentSlotType, type ItemCategory } from "@pawlands/shared";
 
 export interface ItemDefinition {
   id: string;
@@ -11,6 +11,7 @@ export interface ItemDefinition {
   satietyRestore?: number;
   attackPower?: number;
   defense?: number;
+  carryBonusKg?: number;
 }
 
 export const STARTER_ITEMS: ItemDefinition[] = [
@@ -43,4 +44,49 @@ export const STARTER_ITEMS: ItemDefinition[] = [
     valueCoins: 60,
     defense: 8,
   },
+  {
+    id: "travel_pouch",
+    name: "Travel Pouch",
+    category: "accessory",
+    slot: "accessory",
+    weightKg: 0.5,
+    maxStack: 1,
+    valueCoins: 25,
+    carryBonusKg: 3,
+  },
 ];
+
+export const ITEMS_BY_ID = new Map(STARTER_ITEMS.map((item) => [item.id, item]));
+
+export interface BackpackStack {
+  itemId: string;
+  quantity: number;
+  equipped: boolean;
+}
+
+export type Backpack = (BackpackStack | null)[];
+
+export function createStarterBackpack(): Backpack {
+  return Array.from({ length: BACKPACK_SLOTS }, (_, index) => {
+    const item = STARTER_ITEMS[index];
+    return item ? { itemId: item.id, quantity: item.category === "consumable" ? 4 : 1, equipped: false } : null;
+  });
+}
+
+export function backpackStats(backpack: Backpack) {
+  let currentWeightKg = 0;
+  let attackPower = 0;
+  let defense = 0;
+  let carryBonusKg = 0;
+  for (const stack of backpack) {
+    if (!stack) continue;
+    const item = ITEMS_BY_ID.get(stack.itemId);
+    if (!item) continue;
+    currentWeightKg += item.weightKg * stack.quantity;
+    if (!stack.equipped) continue;
+    attackPower += item.attackPower ?? 0;
+    defense += item.defense ?? 0;
+    carryBonusKg += item.carryBonusKg ?? 0;
+  }
+  return { currentWeightKg, attackPower, defense, carryBonusKg };
+}

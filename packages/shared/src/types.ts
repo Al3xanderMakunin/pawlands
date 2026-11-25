@@ -49,6 +49,8 @@ export interface EncumbranceState {
   canSprint: boolean;
 }
 
-export type ItemCategory = "weapon" | "armor" | "consumable" | "material" | "quest";
+export type ItemCategory = "weapon" | "armor" | "accessory" | "consumable" | "material" | "quest";
 
 export type EquipmentSlotType = "weapon" | "head" | "body" | "paws" | "accessory";
+
+export const BACKPACK_SLOTS = 12;

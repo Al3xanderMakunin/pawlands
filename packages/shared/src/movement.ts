@@ -1,5 +1,5 @@
 import { BASE_MOVEMENT_SPEED_PX_PER_SEC } from "@pawlands/config";
-import { calculateSurvivalModifiers } from "./survival.js";
+import { calculateEncumbrance, calculateSurvivalModifiers, canSprint } from "./survival.js";
 
 export interface Position {
   x: number;
@@ -39,9 +39,13 @@ export function createPlayerCollision(grid: CollisionGrid): CanOccupy {
   };
 }
 
-export function movementSpeed(speedMultiplier: number, satiety: number, energy: number, sprint: boolean) {
+export function movementSpeed(
+  speedMultiplier: number, satiety: number, energy: number, sprint: boolean,
+  weightKg = 0, maxWeightKg = Infinity,
+) {
   return BASE_MOVEMENT_SPEED_PX_PER_SEC * speedMultiplier *
-    calculateSurvivalModifiers(satiety).moveSpeedMultiplier * (sprint && energy > 0 ? 1.25 : 1);
+    calculateSurvivalModifiers(satiety).moveSpeedMultiplier * calculateEncumbrance(weightKg, maxWeightKg).moveSpeedMultiplier *
+    (sprint && canSprint(energy, weightKg, maxWeightKg) ? 1.25 : 1);
 }
 
 export function stepMovement(

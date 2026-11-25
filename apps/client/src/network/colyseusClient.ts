@@ -16,6 +16,7 @@ export interface WorldPlayer {
   maxHp: number;
   energy: number;
   maxEnergy: number;
+  currentWeightKg: number;
   maxCarryWeightKg: number;
   speedMultiplier: number;
   satiety: number;

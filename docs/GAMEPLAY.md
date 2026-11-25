@@ -21,8 +21,10 @@ Satiety directly governs energy regeneration, movement speed, and starvation dam
 | `1% – 24%` | `famished` | `0.20x` (20%) | `0.85x` (85%) | `0 HP/s` |
 | `0%` | `starving` | `0.00x` (0%) | `0.70x` (70%) | `2 HP/s` |
 
-- Eating food restores satiety and can optionally provide short-lived health or energy regeneration buffs.
-- Starvation drains health down to 0 HP (resulting in death if not fed in time).
+- Online satiety decreases by 0.1 points/s normally, 0.05 points/s while stationary in a settlement, and 0.3 points/s while sprinting. Rates apply to simulated room time. Survival continues while Colyseus holds the player seat during reconnection.
+- Base energy regeneration is 8 points/s. Sprinting adds 25% movement speed, requires at least one energy point, and spends 12 energy/s times the encumbrance multiplier. A blocked sprint does not spend energy.
+- Dried minnow restores up to 25 satiety points and consumes one unit. A living character with full satiety keeps the food.
+- At 0 HP the character stops moving and cannot use inventory actions. The current starvation recovery returns the character to the room spawn after five seconds with half health and energy and 50 satiety. Combat death and loot rules are part of Stage 4.
 
 ## 2. Inventory & Carry Weight (Encumbrance)
 
@@ -39,6 +41,12 @@ Effective movement speed combines archetype speed, satiety multiplier, and encum
 ```text
 effectiveSpeed = baseSpeed * archetypeSpeedFactor * survival.moveSpeedMultiplier * encumbrance.moveSpeedMultiplier
 ```
+
+The online backpack has 12 indexed slots. The starting load is four dried minnows, iron claws, a leather jerkin, and a travel pouch. Equipped gear retains its backpack slot and contributes to carried weight. Equipping an item replaces the current gear of that type. The claws add 12 attack power, the jerkin adds 8 defense, and the pouch increases capacity by 3 kg.
+
+### 2.1 Levels and Coins
+
+The server grants 1 XP per 160 pixels of actual movement after collision checks. Each level requires `100 × current level` XP. Excess XP rolls over up to level 100. Each new level adds 5 max HP, 3 max energy, 1 strength, and 1 agility. Current health and energy grow by the same amount as their caps. Each gained level credits 10 coins. Authenticated characters see the balance after the checkpoint transaction commits. Guest progression lasts for the room session.
 
 ## 3. Combat Pipeline (PvP & PvE)
 

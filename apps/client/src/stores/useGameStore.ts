@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { ARCHETYPES } from "@pawlands/game-data";
+import type { CharacterSheet } from "@pawlands/protocol";
 import type { CharacterArchetype, SurvivalState, ZoneId } from "@pawlands/shared";
 import type { MinimapPlayerState, MinimapTerrainData } from "../game/minimap/minimapData";
 
@@ -17,6 +18,8 @@ interface GameStoreState {
   touchControlsMode: TouchControlsMode;
   lastActionLabel: string | null;
   survival: SurvivalState;
+  characterSheet: CharacterSheet | null;
+  backpackAction: ((slot: number, equip: boolean) => void) | null;
   isMinimapOpen: boolean;
   minimapTerrain: MinimapTerrainData | null;
   minimapPlayer: MinimapPlayerState | null;
@@ -25,7 +28,7 @@ interface GameStoreState {
   enterWorld: (online?: boolean) => void;
   setArchetypeModalOpen: (open: boolean) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
-  syncSurvival: (snapshot: Pick<SurvivalState, "hp" | "maxHp" | "energy" | "maxEnergy" | "satiety" | "maxCarryWeightKg">) => void;
+  syncSurvival: (snapshot: Pick<SurvivalState, "hp" | "maxHp" | "energy" | "maxEnergy" | "satiety" | "maxCarryWeightKg" | "currentWeightKg">) => void;
   setTouchControlsMode: (mode: TouchControlsMode) => void;
   setLastActionLabel: (label: string | null) => void;
   toggleMinimap: () => void;
@@ -58,6 +61,8 @@ export const useGameStore = create<GameStoreState>((set) => ({
   touchControlsMode: "auto",
   lastActionLabel: null,
   survival: createInitialSurvival("cat"),
+  characterSheet: null,
+  backpackAction: null,
   isMinimapOpen: true,
   minimapTerrain: null,
   minimapPlayer: null,
@@ -70,6 +75,8 @@ export const useGameStore = create<GameStoreState>((set) => ({
   enterWorld: (online = false) =>
     set((state) => ({
       online,
+      characterSheet: null,
+      backpackAction: null,
       survival: createInitialSurvival(state.selectedArchetype),
       worldEntry: state.worldEntry + 1,
       hasEnteredWorld: true,
@@ -77,13 +84,13 @@ export const useGameStore = create<GameStoreState>((set) => ({
     })),
   setArchetypeModalOpen: (isArchetypeModalOpen) => set({ isArchetypeModalOpen }),
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
-  syncSurvival: ({ hp, maxHp, energy, maxEnergy, satiety, maxCarryWeightKg }) =>
+  syncSurvival: ({ hp, maxHp, energy, maxEnergy, satiety, maxCarryWeightKg, currentWeightKg }) =>
     set((state) => {
       const { survival } = state;
       if (survival.hp === hp && survival.maxHp === maxHp && survival.energy === energy &&
         survival.maxEnergy === maxEnergy && survival.satiety === satiety &&
-        survival.maxCarryWeightKg === maxCarryWeightKg) return state;
-      return { survival: { ...survival, hp, maxHp, energy, maxEnergy, satiety, maxCarryWeightKg } };
+        survival.maxCarryWeightKg === maxCarryWeightKg && survival.currentWeightKg === currentWeightKg) return state;
+      return { survival: { ...survival, hp, maxHp, energy, maxEnergy, satiety, maxCarryWeightKg, currentWeightKg } };
     }),
   setTouchControlsMode: (touchControlsMode) => set({ touchControlsMode }),
   setLastActionLabel: (lastActionLabel) => set({ lastActionLabel }),

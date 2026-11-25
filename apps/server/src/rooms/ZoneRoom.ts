@@ -5,14 +5,22 @@ import {
   MAX_PLAYERS_PER_ZONE,
   SERVER_TICK_INTERVAL_MS,
 } from "@pawlands/config";
-import { ARCHETYPES, WORLD_ZONES, type WorldZoneDefinition } from "@pawlands/game-data";
+import { ARCHETYPES, ITEMS_BY_ID, WORLD_ZONES, backpackStats, createStarterBackpack, type WorldZoneDefinition } from "@pawlands/game-data";
 import {
+  BackpackActionSchema,
+  CharacterSheetRequestSchema,
   ClientMessage,
+  ServerMessage,
+  type CharacterSheet,
+  type JoinZoneOptions,
   JoinZoneOptionsSchema,
   MoveInputSchema,
   type MoveInput,
 } from "@pawlands/protocol";
-import { movementSpeed, stepMovement } from "@pawlands/shared";
+import {
+  COINS_PER_LEVEL, PIXELS_PER_XP, advanceProgression, calculateEncumbrance,
+  canSprint, movementSpeed, stepMovement, stepSurvival,
+} from "@pawlands/shared";
 import { loadCharacter, saveCharacter, type SavedStats } from "../characters/characterRepository.js";
 import { DrizzleAuthRepository } from "../auth/authRepository.js";
 import { getZoneTerrain } from "./zoneTerrain.js";
@@ -21,7 +29,7 @@ import { resolveJwtSecret, verifyAuthToken } from "../auth/jwt.js";
 export class PlayerState extends Schema {
   @type("string") id = "";
   @type("string") name = "Whisker";
-  @type("string") archetype = "cat";
+  @type("string") archetype: JoinZoneOptions["archetype"] = "cat";
   @type("number") x = 400;
   @type("number") y = 300;
   @type("number") hp = 100;
@@ -32,6 +40,14 @@ export class PlayerState extends Schema {
   @type("number") speedMultiplier = 1;
   @type("number") maxCarryWeightKg = 20;
   @type("number") lastMoveSeq = -1;
+  @type("number") currentWeightKg = 0;
+
+  sheet: CharacterSheet = {
+    backpack: createStarterBackpack(),
+    level: 1, xp: 0, coins: 0, strength: 0, agility: 0, attackPower: 0, defense: 0,
+  };
+  baseCarryWeightKg = 20;
+  respawnAt = 0;
 }
 
 export class ZoneState extends Schema {
@@ -44,8 +60,6 @@ type ZoneAuth = { userId: string; username: string } | { userId?: undefined };
 interface CharacterSession {
   key: string;
   characterId?: string;
-  strength: number;
-  agility: number;
   saving?: Promise<void>;
 }
 
@@ -79,6 +93,15 @@ export class ZoneRoom extends Room {
       if (!result.success) return;
       this.handleMoveInput(client.sessionId, result.data);
     });
+
+    this.onMessage(ClientMessage.CHARACTER_SHEET, (client, payload) => {
+      if (!CharacterSheetRequestSchema.safeParse(payload).success) return;
+      const player = this.state.players.get(client.sessionId);
+      if (player) client.send(ServerMessage.CHARACTER_SHEET, player.sheet);
+    });
+
+    this.onMessage(ClientMessage.USE_ITEM, (client, payload) => this.handleBackpackAction(client, payload, false));
+    this.onMessage(ClientMessage.EQUIP_ITEM, (client, payload) => this.handleBackpackAction(client, payload, true));
 
     this.setSimulationInterval((deltaMs) => {
       this.stepSimulation(deltaMs);
@@ -132,24 +155,29 @@ export class ZoneRoom extends Room {
     player.maxEnergy = archetypeDef.stats.maxEnergy;
     player.satiety = archetypeDef.stats.maxSatiety;
     player.speedMultiplier = archetypeDef.stats.speedMultiplier;
-    player.maxCarryWeightKg = archetypeDef.stats.maxCarryWeightKg;
+    player.baseCarryWeightKg = archetypeDef.stats.maxCarryWeightKg;
+
+    player.sheet.strength = archetypeDef.stats.strength;
+    player.sheet.agility = archetypeDef.stats.agility;
 
     if (auth?.userId) {
       const key = `${auth.userId}:${joinData.archetype}`;
       if (activeCharacters.has(key)) throw new ServerError(409, "Character is already online");
       activeCharacters.add(key);
-      const character: CharacterSession = {
-        key, strength: archetypeDef.stats.strength, agility: archetypeDef.stats.agility,
-      };
+      const character: CharacterSession = { key };
       this.characters.set(client.sessionId, character);
       try {
         const saved = await loadCharacter(auth.userId, joinData.archetype, this.zone, spawn);
         if (client.state === ClientState.LEAVING) throw new Error("Client left while loading character");
         character.characterId = saved.id;
-        character.strength = saved.stats.strength;
-        character.agility = saved.stats.agility;
+        Object.assign(player.sheet, {
+          level: saved.level, xp: saved.xp, coins: saved.coins, backpack: saved.backpack,
+          strength: saved.stats.strength, agility: saved.stats.agility,
+        });
         const { hp, maxHp, energy, maxEnergy, satiety, speedMultiplier, maxCarryWeightKg } = saved.stats;
-        Object.assign(player, { hp, maxHp, energy, maxEnergy, satiety, speedMultiplier, maxCarryWeightKg });
+        Object.assign(player, {
+          hp, maxHp, energy, maxEnergy, satiety, speedMultiplier, baseCarryWeightKg: maxCarryWeightKg,
+        });
         if (saved.position.zoneId === this.zone.id && this.terrain.canOccupy(saved.position.x, saved.position.y)) {
           player.x = saved.position.x;
           player.y = saved.position.y;
@@ -160,6 +188,7 @@ export class ZoneRoom extends Room {
       }
     }
 
+    this.refreshBackpackStats(player);
     this.state.players.set(client.sessionId, player);
   }
 
@@ -187,13 +216,18 @@ export class ZoneRoom extends Room {
 
   private async persist(character: CharacterSession, player: PlayerState): Promise<void> {
     if (!character.characterId) return;
-    const { x, y, hp, maxHp, energy, maxEnergy, satiety, speedMultiplier, maxCarryWeightKg } = player;
+    const { x, y, hp, maxHp, energy, maxEnergy, satiety, speedMultiplier, baseCarryWeightKg } = player;
     const stats: SavedStats = {
-      hp, maxHp, energy, maxEnergy, satiety, speedMultiplier, maxCarryWeightKg,
-      strength: character.strength, agility: character.agility,
+      hp, maxHp, energy, maxEnergy, satiety, speedMultiplier, maxCarryWeightKg: baseCarryWeightKg,
+      strength: player.sheet.strength, agility: player.sheet.agility,
     };
     try {
-      await saveCharacter(character.characterId, this.zone.id, { x, y }, stats);
+      const { level, xp, backpack } = player.sheet;
+      const coins = await saveCharacter(character.characterId, this.zone.id, { x, y }, stats, { level, xp, backpack });
+      if (coins !== undefined && coins !== player.sheet.coins) {
+        player.sheet.coins = coins;
+        this.sendSheet(player);
+      }
     } catch (error) {
       console.error("Failed to save character checkpoint", character.characterId, error);
     }
@@ -205,18 +239,102 @@ export class ZoneRoom extends Room {
     this.pendingInputs.set(sessionId, { ...input, expiresAt: Date.now() + 250 });
   }
 
+  private refreshBackpackStats(player: PlayerState): void {
+    const { currentWeightKg, attackPower, defense, carryBonusKg } = backpackStats(player.sheet.backpack);
+    player.currentWeightKg = currentWeightKg;
+    player.maxCarryWeightKg = player.baseCarryWeightKg + carryBonusKg;
+    Object.assign(player.sheet, { attackPower, defense });
+  }
+
+  private handleBackpackAction(client: Client, payload: unknown, equip: boolean): void {
+    const result = BackpackActionSchema.safeParse(payload);
+    const player = this.state.players.get(client.sessionId);
+    if (!result.success || !player || player.hp <= 0) return;
+
+    const { slot } = result.data;
+    const backpack = player.sheet.backpack;
+    const stack = backpack[slot];
+    const item = stack && ITEMS_BY_ID.get(stack.itemId);
+    if (!stack || !item) return;
+
+    if (equip) {
+      if (!item.slot) return;
+      const equipped = !stack.equipped;
+      player.sheet.backpack = backpack.map((entry, index) => {
+        if (index === slot) return { ...stack, equipped };
+        if (equipped && entry?.equipped && ITEMS_BY_ID.get(entry.itemId)?.slot === item.slot) {
+          return { ...entry, equipped: false };
+        }
+        return entry;
+      });
+    } else {
+      const maxSatiety = ARCHETYPES[player.archetype].stats.maxSatiety;
+      if (!item.satietyRestore || player.satiety >= maxSatiety) return;
+      player.satiety = Math.min(maxSatiety, player.satiety + item.satietyRestore);
+      const remaining = stack.quantity > 1 ? { ...stack, quantity: stack.quantity - 1 } : null;
+      player.sheet.backpack = backpack.map((entry, index) => index === slot ? remaining : entry);
+    }
+
+    this.refreshBackpackStats(player);
+    client.send(ServerMessage.CHARACTER_SHEET, player.sheet);
+  }
+
+  private sendSheet(player: PlayerState): void {
+    this.clients.getById(player.id)?.send(ServerMessage.CHARACTER_SHEET, player.sheet);
+  }
+
+  private awardMovementXp(player: PlayerState, distance: number): void {
+    const sheet = player.sheet;
+    const next = advanceProgression(sheet.level, sheet.xp, distance / PIXELS_PER_XP);
+    const levelsGained = next.level - sheet.level;
+    const xpChanged = Math.floor(sheet.xp) !== Math.floor(next.xp);
+    Object.assign(sheet, next);
+    if (levelsGained > 0) {
+      sheet.strength += levelsGained;
+      sheet.agility += levelsGained;
+      player.maxHp += 5 * levelsGained;
+      player.hp += 5 * levelsGained;
+      player.maxEnergy += 3 * levelsGained;
+      player.energy += 3 * levelsGained;
+      if (!this.characters.has(player.id)) sheet.coins += levelsGained * COINS_PER_LEVEL;
+    }
+    if (xpChanged || levelsGained) this.sendSheet(player);
+  }
+
   private stepSimulation(deltaMs: number): void {
     const dt = Math.min(deltaMs, SERVER_TICK_INTERVAL_MS);
     const now = Date.now();
     this.state.players.forEach((player, sessionId) => {
       const input = this.pendingInputs.get(sessionId);
-      if (!input || input.expiresAt <= now) return;
+      if (player.hp <= 0) {
+        player.respawnAt ||= now + 5_000;
+        if (now >= player.respawnAt) {
+          Object.assign(player, this.terrain.spawn, {
+            hp: player.maxHp / 2, energy: player.maxEnergy / 2, satiety: 50, respawnAt: 0,
+          });
+          this.pendingInputs.delete(sessionId);
+        }
+        return;
+      }
 
-      const speed = movementSpeed(player.speedMultiplier, player.satiety, player.energy, input.sprint);
-      const next = stepMovement(player, input, speed, dt, this.terrain.canOccupy);
-      player.x = next.x;
-      player.y = next.y;
-      player.lastMoveSeq = input.seq;
+      const { currentWeightKg, maxCarryWeightKg } = player;
+      let distance = 0;
+      let sprinting = false;
+      if (input && input.expiresAt > now) {
+        sprinting = input.sprint && canSprint(player.energy, currentWeightKg, maxCarryWeightKg);
+        const speed = movementSpeed(
+          player.speedMultiplier, player.satiety, player.energy, sprinting, currentWeightKg, maxCarryWeightKg,
+        );
+        const next = stepMovement(player, input, speed, dt, this.terrain.canOccupy);
+        distance = Math.hypot(next.x - player.x, next.y - player.y);
+        Object.assign(player, next, { lastMoveSeq: input.seq });
+      }
+      const encumbrance = calculateEncumbrance(currentWeightKg, maxCarryWeightKg);
+      Object.assign(player, stepSurvival(
+        player, dt / 1000, sprinting && distance > 0,
+        distance === 0 && this.zone.type === "settlement", encumbrance.energyCostMultiplier,
+      ));
+      if (player.hp > 0 && distance > 0) this.awardMovementXp(player, distance);
     });
   }
 }

@@ -5,6 +5,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useAdminStore } from "../stores/useAdminStore";
 import { useAuthStore } from "../stores/useAuthStore";
 import { useGameStore, type ConnectionStatus, type TouchControlsMode } from "../stores/useGameStore";
+import { BackpackPanel } from "./BackpackPanel";
 import { Minimap } from "./Minimap";
 
 const NEXT_TOUCH_MODE: Record<TouchControlsMode, TouchControlsMode> = {
@@ -75,7 +76,7 @@ export function HudOverlay({ onOpenAccountSettings }: { onOpenAccountSettings: (
             <div className="flex justify-between">
               <span>HP</span>
               <span>
-                {survival.hp}/{survival.maxHp}
+                {Math.ceil(survival.hp)}/{survival.maxHp}
               </span>
             </div>
             <div className="mt-0.5 h-1.5 w-24 overflow-hidden rounded-full bg-slate-800">
@@ -87,7 +88,7 @@ export function HudOverlay({ onOpenAccountSettings }: { onOpenAccountSettings: (
             <div className="flex justify-between">
               <span>EN</span>
               <span>
-                {survival.energy}/{survival.maxEnergy}
+                {Math.floor(survival.energy)}/{survival.maxEnergy}
               </span>
             </div>
             <div className="mt-0.5 h-1.5 w-24 overflow-hidden rounded-full bg-slate-800">
@@ -112,9 +113,10 @@ export function HudOverlay({ onOpenAccountSettings }: { onOpenAccountSettings: (
             {t(`survivalStatus.${survivalMods.status}`)}
           </span>
           <span>
-            {t("carry")}: {survival.currentWeightKg}/{survival.maxCarryWeightKg} {t("kg")} (
+            {t("carry")}: {Number(survival.currentWeightKg.toFixed(2))}/{survival.maxCarryWeightKg} {t("kg")} (
             {t(`encumbrance.${encumbrance.tier}`)})
           </span>
+          {survival.hp <= 0 && <span role="status">{t("rpg.respawning")}</span>}
           {lastActionLabel && (
             <span className="font-semibold text-amber-300">{lastActionLabel}</span>
           )}
@@ -124,6 +126,7 @@ export function HudOverlay({ onOpenAccountSettings }: { onOpenAccountSettings: (
       {/* Quick Actions & Minimap */}
       <div className="flex flex-col items-end gap-2">
         <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-2">
+          <BackpackPanel />
           {user ? (
             <div className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-slate-900/85 px-2.5 py-1 text-xs text-emerald-200 backdrop-blur">
               <span className="font-semibold">@{user.username}</span>

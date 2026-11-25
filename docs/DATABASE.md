@@ -10,11 +10,13 @@ Pawlands uses **PostgreSQL** with **Drizzle ORM** (`apps/server/src/database/sch
 | Accounts, characters, inventory, equipment, wallets, quests | PostgreSQL (ACID) | Requires durability, anti-duplication guarantees, and auditability. |
 | Session cache, rate limits, online presence, matchmaking | Redis | Fast TTL lookups and cross-room coordination. |
 
-## 2. Core Entities (17 Tables)
+## 2. Core Entities
+
+The list includes planned systems. For Stage 3, the static item catalog lives in `@pawlands/game-data`, and backpack stacks and equipment flags live in `characters.backpack`. The normalized item and equipment tables are planned for systems that need unique item instances.
 
 1. **`users`**: Player accounts (`id`, `email` nullable, `username`, `passwordHash` nullable, `googleId` nullable unique, `yandexId` nullable unique, `appleSub` nullable unique, `vkId` nullable unique, `role`, `isBanned`, `banReason`, `createdAt`, `updatedAt`).
-2. **`characters`**: Playable feline characters owned by a user (`id`, `userId`, `name`, `archetype`, `level`, `xp`, `createdAt`).
-3. **`character_stats`**: Durable baseline and current vitals (`characterId`, `hp`, `maxHp`, `energy`, `maxEnergy`, `satiety`, `strength`, `agility`, `baseSpeed`, `maxCarryWeightKg`).
+2. **`characters`**: Playable feline characters owned by a user (`id`, `userId`, `name`, `archetype`, `level`, fractional `xp`, nullable JSONB `backpack`, `createdAt`).
+3. **`character_stats`**: Durable baseline and current vitals (`characterId`, `hp`, `maxHp`, `energy`, `maxEnergy`, `satiety`, `strength`, `agility`, `speedMultiplier`, base `maxCarryWeightKg`).
 4. **`items`**: Static/catalog item definitions mirrored or seeded from game data (`id`, `slug`, `name`, `category`, `weightKg`, `maxStack`, `metadata`).
 5. **`item_instances`**: Unique or rolled equipment instances (`id`, `itemId`, `durability`, `quality`, `bonusStats`).
 6. **`inventory_slots`**: Character backpack slots (`id`, `characterId`, `slotIndex`, `itemId`, `itemInstanceId`, `quantity`).
@@ -33,7 +35,7 @@ Pawlands uses **PostgreSQL** with **Drizzle ORM** (`apps/server/src/database/sch
 ## 3. Transactional Integrity Rules
 
 - **Economy & Loot**: Every coin transfer or item move between players/NPCs executes inside `db.transaction(...)` with row locking (`FOR UPDATE`) to prevent item or coin duplication.
-- **Checkpoints**: `character_positions` and `character_stats` are persisted on zone transition, disconnect, and periodic autosave intervals (e.g., every 30–60 seconds).
+- **Checkpoints**: `character_positions` and `character_stats` are persisted on permanent room departure and at ten-second intervals.
 
 ## 4. Migrations
 
@@ -50,6 +52,8 @@ On server startup/restart (`apps/server/src/index.ts`), `runMigrations()` automa
 
 An authenticated player loads the oldest character owned by their account for the selected archetype, or creates one on first entry. The account row lock serializes creation. The current server process permits one live session per account and archetype across all zone rooms.
 
-The server writes the character's coordinates, zone, health, energy, satiety, and gameplay stats in one transaction every ten seconds and on permanent room departure. Periodic and final writes are serialized. An interrupted connection keeps its room seat for the reconnect window. Guests and offline play have no PostgreSQL checkpoints.
+The server writes the character's coordinates, zone, fractional vitals, gameplay stats, backpack, and level/XP in one transaction every ten seconds and on permanent room departure. New and pre-Stage 3 characters receive the starter backpack once, when the stored value is null. The equipped pouch bonus is derived on load from the backpack.
+
+When a checkpoint raises the persisted level, the transaction credits the wallet and appends a `level_up` ledger entry with the new balance and level. A row lock and the previously stored level prevent a retried checkpoint from paying the same reward twice. Periodic and final writes are serialized. An interrupted connection keeps its room seat for the reconnect window. Guests and offline play have no PostgreSQL checkpoints.
 
 On entry to the saved zone, the room restores the position if the current Tiled collision map permits it. Selecting another zone or loading a blocked position uses the selected zone's spawn. Zone metadata is registered lazily when needed for the position foreign key, preserving existing administrator overrides.
