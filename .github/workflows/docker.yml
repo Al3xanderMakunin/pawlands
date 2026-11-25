@@ -8,6 +8,8 @@ on:
         required: true
         type: string
   push:
+    branches:
+      - main
     tags:
       - "v*"
   release:
@@ -90,7 +92,7 @@ jobs:
             type=semver,pattern={{version}},value=${{ needs.prepare.outputs.version_tag }}
             type=semver,pattern=v{{version}},value=${{ needs.prepare.outputs.version_tag }}
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.prepare.outputs.version_tag }}
-            type=raw,value=latest,enable=${{ startsWith(needs.prepare.outputs.version_tag, 'v') && !contains(needs.prepare.outputs.version_tag, '-') }}
+            type=raw,value=latest,enable=${{ (startsWith(needs.prepare.outputs.version_tag, 'v') && !contains(needs.prepare.outputs.version_tag, '-')) || needs.prepare.outputs.version_tag == 'main' }}
             type=raw,value=${{ needs.prepare.outputs.version_tag }},enable=${{ !startsWith(needs.prepare.outputs.version_tag, 'v') }}
 
       - name: Build and push image
