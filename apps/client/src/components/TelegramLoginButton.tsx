@@ -4,6 +4,9 @@ import { useTranslation } from "react-i18next";
 declare global {
   interface Window {
     pawlandsOnTelegramAuth?: (user: unknown) => void;
+    __PAWLANDS_ENV__?: {
+      VITE_TELEGRAM_BOT_USERNAME?: string;
+    };
   }
 }
 
@@ -12,12 +15,16 @@ interface TelegramLoginButtonProps {
   disabled?: boolean;
 }
 
-const telegramBotUsername = (import.meta.env.VITE_TELEGRAM_BOT_USERNAME ?? "")
-  .trim()
-  .replace(/^@+/, "");
+function resolveTelegramBotUsername(): string {
+  const runtimeValue =
+    typeof window !== "undefined" ? window.__PAWLANDS_ENV__?.VITE_TELEGRAM_BOT_USERNAME : undefined;
+  const raw = runtimeValue || import.meta.env.VITE_TELEGRAM_BOT_USERNAME || "";
+  return raw.trim().replace(/^@+/, "");
+}
 
 export function TelegramLoginButton({ onAuth, disabled = false }: TelegramLoginButtonProps) {
   const { t } = useTranslation();
+  const telegramBotUsername = resolveTelegramBotUsername();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const onAuthRef = useRef(onAuth);
   onAuthRef.current = onAuth;
@@ -45,7 +52,7 @@ export function TelegramLoginButton({ onAuth, disabled = false }: TelegramLoginB
       container.innerHTML = "";
       delete window.pawlandsOnTelegramAuth;
     };
-  }, []);
+  }, [telegramBotUsername]);
 
   if (!telegramBotUsername) {
     return (

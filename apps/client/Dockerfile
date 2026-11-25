@@ -30,6 +30,8 @@ RUN pnpm --filter './packages/*' build && pnpm --filter @pawlands/client build
 
 FROM nginx:1.31-alpine AS runner
 COPY apps/client/nginx.conf /etc/nginx/conf.d/default.conf
+COPY apps/client/docker-entrypoint.d/40-env-config.sh /docker-entrypoint.d/40-env-config.sh
+RUN chmod +x /docker-entrypoint.d/40-env-config.sh
 COPY --from=builder /app/apps/client/dist /usr/share/nginx/html
 
 EXPOSE 80
