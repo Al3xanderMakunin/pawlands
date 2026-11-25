@@ -1,32 +1,85 @@
 import { randomBytes, randomInt } from "node:crypto";
 import type {
   AppleAuthRequest,
-  AuthErrorCode,
   AuthResponse,
   AuthUser,
   LoginRequest,
   RegisterRequest,
   TelegramAuthRequest,
   UserRole,
+  VkAuthRequest,
 } from "@pawlands/protocol";
 import { AppleTokenVerificationError, type AppleTokenVerifier } from "./apple.js";
+import { AuthError } from "./authError.js";
 import type { AuthRepository, UserRecord } from "./authRepository.js";
 import type { GoogleUserProfile } from "./googleOAuth.js";
 import { signAuthToken, verifyAuthToken } from "./jwt.js";
 import { hashPassword, verifyPassword } from "./password.js";
 import { verifyTelegramAuthPayload } from "./telegram.js";
 import type { YandexUserProfile } from "./yandexOAuth.js";
+import type { VkIdProvider, VkUserProfile } from "./vkIdClient.js";
 
-export class AuthError extends Error {
-  readonly code: AuthErrorCode;
-  readonly statusCode: number;
+export { AuthError };
 
-  constructor(code: AuthErrorCode, message: string, statusCode: number) {
-    super(message);
-    this.name = "AuthError";
-    this.code = code;
-    this.statusCode = statusCode;
+const CYRILLIC_TO_LATIN: Record<string, string> = {
+  а: "a",
+  б: "b",
+  в: "v",
+  г: "g",
+  д: "d",
+  е: "e",
+  ё: "yo",
+  ж: "zh",
+  з: "z",
+  и: "i",
+  й: "y",
+  к: "k",
+  л: "l",
+  м: "m",
+  н: "n",
+  о: "o",
+  п: "p",
+  р: "r",
+  с: "s",
+  т: "t",
+  у: "u",
+  ф: "f",
+  х: "kh",
+  ц: "ts",
+  ч: "ch",
+  ш: "sh",
+  щ: "shch",
+  ъ: "",
+  ы: "y",
+  ь: "",
+  э: "e",
+  ю: "yu",
+  я: "ya",
+};
+
+function transliterateToUsernameBase(profile: VkUserProfile): string {
+  const raw = [profile.firstName, profile.lastName].filter(Boolean).join("_").trim();
+  if (!raw) {
+    return `vk_${profile.vkId}`.slice(0, 20);
   }
+
+  let transliterated = "";
+  for (const ch of raw.toLowerCase()) {
+    if (ch in CYRILLIC_TO_LATIN) {
+      transliterated += CYRILLIC_TO_LATIN[ch];
+    } else if (/[a-z0-9_-]/.test(ch)) {
+      transliterated += ch;
+    } else if (ch === " ") {
+      transliterated += "_";
+    }
+  }
+
+  const cleaned = transliterated.replace(/_+/g, "_").replace(/^[_-]+|[_-]+$/g, "");
+  if (cleaned.length >= 3) {
+    return cleaned.slice(0, 20);
+  }
+
+  return `vk_${profile.vkId}`.slice(0, 20);
 }
 
 function toAuthUser(record: UserRecord): AuthUser {
@@ -107,7 +160,8 @@ export class AuthService {
     private readonly repository: AuthRepository,
     private readonly jwtSecret: string,
     private readonly telegramBotToken?: string,
-    private readonly appleVerifier: AppleTokenVerifier | null = null
+    private readonly appleVerifier: AppleTokenVerifier | null = null,
+    private readonly vkIdProvider?: VkIdProvider
   ) {}
 
   private async resolveUniqueTelegramUsername(input: TelegramAuthRequest): Promise<string> {
@@ -170,6 +224,25 @@ export class AuthService {
 
     const fallbackSuffix = `_${randomInt(100000, 999999)}`;
     return `${base.slice(0, 24 - fallbackSuffix.length)}${fallbackSuffix}`;
+  }
+
+  private async resolveUniqueUsername(profile: VkUserProfile): Promise<string> {
+    const base = transliterateToUsernameBase(profile);
+    const candidates = [base];
+    for (let i = 1; i <= 20; i += 1) {
+      const suffix = `_${i}`;
+      candidates.push(`${base.slice(0, 24 - suffix.length)}${suffix}`);
+    }
+
+    for (const candidate of candidates) {
+      const existing = await this.repository.findByUsername(candidate);
+      if (!existing) {
+        return candidate;
+      }
+    }
+
+    const randomSuffix = `_${Math.floor(1000 + Math.random() * 9000)}`;
+    return `${base.slice(0, 24 - randomSuffix.length)}${randomSuffix}`;
   }
 
   async register(input: RegisterRequest): Promise<AuthResponse> {
@@ -387,6 +460,59 @@ export class AuthService {
       if (!user) {
         throw new AuthError("INTERNAL_ERROR", "Unable to create Apple user account", 500);
       }
+    }
+
+    return this.buildAuthResponse(user);
+  }
+
+  async authenticateWithVk(input: VkAuthRequest): Promise<AuthResponse> {
+    if (!this.vkIdProvider) {
+      throw new AuthError(
+        "VK_AUTH_NOT_CONFIGURED",
+        "VK ID authentication is not configured on the server",
+        503
+      );
+    }
+
+    const profile = await this.vkIdProvider.exchangeCodeAndGetProfile(input);
+
+    let user = await this.repository.findByVkId(profile.vkId);
+    if (user) {
+      return this.buildAuthResponse(user);
+    }
+
+    if (profile.email) {
+      const existingByEmail = await this.repository.findByEmail(profile.email);
+      if (existingByEmail) {
+        if (existingByEmail.vkId && existingByEmail.vkId !== profile.vkId) {
+          throw new AuthError(
+            "VK_AUTH_FAILED",
+            "This email is already linked to another VK ID account",
+            409
+          );
+        }
+        user = await this.repository.linkVkId(existingByEmail.id, profile.vkId);
+        return this.buildAuthResponse(user);
+      }
+    }
+
+    const username = await this.resolveUniqueUsername(profile);
+    try {
+      user = await this.repository.createUser({
+        email: profile.email,
+        username,
+        passwordHash: null,
+        vkId: profile.vkId,
+      });
+    } catch (err) {
+      const uniqueErr = isPgUniqueViolation(err);
+      if (uniqueErr) {
+        const racedByVkId = await this.repository.findByVkId(profile.vkId);
+        if (racedByVkId) {
+          return this.buildAuthResponse(racedByVkId);
+        }
+      }
+      throw err;
     }
 
     return this.buildAuthResponse(user);

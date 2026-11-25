@@ -26,6 +26,7 @@ import {
   YandexOAuthClient,
   type YandexOAuthProvider,
 } from "./auth/yandexOAuth.js";
+import { HttpVkIdProvider, type VkIdProvider } from "./auth/vkIdClient.js";
 
 export interface CreateAppOptions {
   authRepository?: AuthRepository;
@@ -33,6 +34,7 @@ export interface CreateAppOptions {
   yandexOAuth?: YandexOAuthProvider;
   appleVerifier?: AppleTokenVerifier | null;
   appleClientId?: string | null;
+  vkIdProvider?: VkIdProvider;
   jwtSecret?: string;
   telegramBotToken?: string;
   corsOrigin?: string | boolean;
@@ -62,6 +64,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
 
   const authRepository = options.authRepository ?? new DrizzleAuthRepository();
   const adminRepository = options.adminRepository ?? new DrizzleAdminRepository();
+  const vkIdProvider = options.vkIdProvider ?? new HttpVkIdProvider();
   const jwtSecret = options.jwtSecret ?? resolveJwtSecret();
   const telegramBotToken = options.telegramBotToken ?? resolveTelegramBotToken();
   const configuredAppleIds = resolveAppleClientIds();
@@ -79,7 +82,8 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     authRepository,
     jwtSecret,
     telegramBotToken,
-    appleVerifier
+    appleVerifier,
+    vkIdProvider
   );
   const googleOAuthConfig =
     options.googleOAuthConfig === undefined

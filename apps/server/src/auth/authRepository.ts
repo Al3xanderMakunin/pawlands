@@ -9,6 +9,7 @@ export interface UserRecord {
   username: string;
   passwordHash: string | null;
   googleId: string | null;
+  vkId: string | null;
   role: UserRole;
   isBanned: boolean;
   banReason: string | null;
@@ -25,6 +26,7 @@ export interface CreateUserInput {
   username: string;
   passwordHash?: string | null;
   googleId?: string | null;
+  vkId?: string | null;
   role?: UserRole;
   yandexId?: string | null;
   telegramId?: string | null;
@@ -47,6 +49,7 @@ function toUserRecord(row: typeof users.$inferSelect): UserRecord {
     passwordHash: row.passwordHash,
     googleId: row.googleId,
     yandexId: row.yandexId,
+    vkId: row.vkId,
     role: normalizeRole(row.role),
     isBanned: row.isBanned,
     banReason: row.banReason ?? null,
@@ -63,6 +66,7 @@ export interface AuthRepository {
   findByUsername(username: string): Promise<UserRecord | null>;
   findByGoogleId(googleId: string): Promise<UserRecord | null>;
   findByTelegramId(telegramId: string): Promise<UserRecord | null>;
+  findByVkId(vkId: string): Promise<UserRecord | null>;
   findById(id: string): Promise<UserRecord | null>;
   findByYandexId(yandexId: string): Promise<UserRecord | null>;
   findByAppleSub(appleSub: string): Promise<UserRecord | null>;
@@ -70,6 +74,7 @@ export interface AuthRepository {
   createUser(input: CreateUserInput): Promise<UserRecord>;
   linkGoogleAccount(userId: string, googleId: string): Promise<UserRecord>;
   linkYandexAccount(userId: string, yandexId: string): Promise<UserRecord>;
+  linkVkId(userId: string, vkId: string): Promise<UserRecord>;
 }
 
 export class DrizzleAuthRepository implements AuthRepository {
@@ -98,6 +103,15 @@ export class DrizzleAuthRepository implements AuthRepository {
       .select()
       .from(users)
       .where(eq(users.googleId, googleId))
+      .limit(1);
+    return row ? toUserRecord(row) : null;
+  }
+
+  async findByVkId(vkId: string): Promise<UserRecord | null> {
+    const [row] = await db
+      .select()
+      .from(users)
+      .where(eq(users.vkId, vkId.trim()))
       .limit(1);
     return row ? toUserRecord(row) : null;
   }
@@ -152,6 +166,7 @@ export class DrizzleAuthRepository implements AuthRepository {
         username: input.username.trim(),
         passwordHash: input.passwordHash ?? null,
         googleId: input.googleId ?? null,
+        vkId: input.vkId ? input.vkId.trim() : null,
         role: input.role ?? "player",
         yandexId: input.yandexId ?? null,
         telegramId: input.telegramId ?? null,
@@ -196,6 +211,23 @@ export class DrizzleAuthRepository implements AuthRepository {
 
     if (!updated) {
       throw new Error("Failed to link Yandex account");
+    }
+
+    return toUserRecord(updated);
+  }
+
+  async linkVkId(userId: string, vkId: string): Promise<UserRecord> {
+    const [updated] = await db
+      .update(users)
+      .set({
+        vkId: vkId.trim(),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+
+    if (!updated) {
+      throw new Error("Failed to link VK ID to user record");
     }
 
     return toUserRecord(updated);

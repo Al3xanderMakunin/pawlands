@@ -14,6 +14,7 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash"),
   googleId: text("google_id").unique(),
+  vkId: text("vk_id").unique(),
   role: text("role").default("player").notNull(),
   isBanned: boolean("is_banned").default(false).notNull(),
   banReason: text("ban_reason"),

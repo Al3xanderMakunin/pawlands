@@ -14,6 +14,7 @@ import {
   AuthApiError,
   authenticateWithTelegram,
   fetchAuthProviders,
+  authenticateWithVk,
   fetchCurrentUser,
   getGoogleAuthUrl,
   loginAccount,
@@ -21,6 +22,7 @@ import {
   logoutAccount,
   registerAccount,
 } from "../network/authClient";
+import { consumeVkIdCallbackFromUrl, startVkIdAuth } from "../network/vkIdAuth";
 
 export const AUTH_TOKEN_STORAGE_KEY = "pawlands.auth_token";
 
@@ -29,7 +31,8 @@ export type AuthUiErrorCode =
   | AuthErrorCode
   | "NETWORK_ERROR"
   | "PASSWORDS_MISMATCH"
-  | "APPLE_POPUP_CANCELLED";
+  | "APPLE_POPUP_CANCELLED"
+  | "VK_STATE_MISMATCH";
 
 function readStoredToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -71,6 +74,8 @@ interface AuthStoreState {
   startGoogleAuth: () => void;
   loginWithTelegram: (payload: TelegramAuthRequest) => Promise<boolean>;
   loginWithApple: () => Promise<boolean>;
+  loginWithVk: () => Promise<void>;
+  completeVkCallback: () => Promise<boolean>;
   logout: () => Promise<void>;
   restoreSession: () => Promise<void>;
   handleOAuthCallbackFromUrl: () => Promise<void>;
@@ -174,6 +179,52 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
           ? err.code
           : "APPLE_AUTH_FAILED";
       set({ isSubmitting: false, errorCode: code });
+      return false;
+    }
+  },
+
+  loginWithVk: async () => {
+    set({ isSubmitting: true, errorCode: null });
+    const status = await startVkIdAuth();
+    if (status === "not_configured") {
+      set({ isSubmitting: false, errorCode: "VK_AUTH_NOT_CONFIGURED" });
+    }
+  },
+
+  completeVkCallback: async () => {
+    const callback = consumeVkIdCallbackFromUrl();
+    if (callback.status === "none") {
+      return false;
+    }
+
+    if (callback.status === "error") {
+      set({
+        isAuthModalOpen: true,
+        isSubmitting: false,
+        errorCode: callback.errorCode,
+      });
+      return false;
+    }
+
+    set({ isSubmitting: true, errorCode: null });
+    try {
+      const response = await authenticateWithVk(callback.payload);
+      writeStoredToken(response.token);
+      set({
+        user: response.user,
+        token: response.token,
+        isSubmitting: false,
+        isAuthModalOpen: false,
+        errorCode: null,
+      });
+      return true;
+    } catch (err) {
+      const code = err instanceof AuthApiError ? err.code : "VK_AUTH_FAILED";
+      set({
+        isAuthModalOpen: true,
+        isSubmitting: false,
+        errorCode: code,
+      });
       return false;
     }
   },

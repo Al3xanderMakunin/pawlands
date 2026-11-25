@@ -4,6 +4,7 @@ import {
   LoginRequestSchema,
   RegisterRequestSchema,
   TelegramAuthRequestSchema,
+  VkAuthRequestSchema,
 } from "@pawlands/protocol";
 import { AuthError, type AuthService } from "../auth/authService.js";
 import {
@@ -260,6 +261,24 @@ export async function registerAuthRoutes(
       request.log.error(err, "Yandex ID OAuth callback failed");
       const errorCode = err instanceof AuthError ? err.code : "YANDEX_AUTH_FAILED";
       return reply.redirect(`${clientUrl}/#auth_error=${errorCode}`);
+    }
+  });
+
+  fastify.post("/api/v1/auth/vk", async (request, reply) => {
+    const parsed = VkAuthRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "VALIDATION_ERROR",
+        message: "Invalid VK ID authentication payload",
+        details: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    try {
+      const result = await authService.authenticateWithVk(parsed.data);
+      return reply.code(200).send(result);
+    } catch (err) {
+      return handleAuthRouteError(err, reply, request);
     }
   });
 }

@@ -10,7 +10,12 @@ export function App() {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    void useAuthStore.getState().handleOAuthCallbackFromUrl();
+    void (async () => {
+      const handledVk = await useAuthStore.getState().completeVkCallback();
+      if (!handledVk) {
+        await useAuthStore.getState().handleOAuthCallbackFromUrl();
+      }
+    })();
   }, []);
 
   useEffect(() => {

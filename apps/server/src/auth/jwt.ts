@@ -93,7 +93,7 @@ export function verifyAuthToken(token: string, secret: string): AuthTokenPayload
     if (
       typeof payload.sub !== "string" ||
       typeof payload.username !== "string" ||
-      (payload.email !== null && typeof payload.email !== "string") ||
+      (typeof payload.email !== "string" && payload.email !== null) ||
       typeof payload.iat !== "number" ||
       typeof payload.exp !== "number"
     ) {

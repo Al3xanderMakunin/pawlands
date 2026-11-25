@@ -41,6 +41,13 @@ export const AppleAuthRequestSchema = z.object({
     .optional(),
 });
 
+export const VkAuthRequestSchema = z.object({
+  code: z.string().trim().min(1).max(2048),
+  deviceId: z.string().trim().min(1).max(512),
+  codeVerifier: z.string().trim().min(43).max(128),
+  redirectUri: z.string().trim().url().max(2048),
+});
+
 export const AuthUserSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email().nullable(),
@@ -84,6 +91,8 @@ export const AuthErrorCodeSchema = z.enum([
   "YANDEX_AUTH_FAILED",
   "APPLE_AUTH_FAILED",
   "APPLE_NOT_CONFIGURED",
+  "VK_AUTH_NOT_CONFIGURED",
+  "VK_AUTH_FAILED",
   "INTERNAL_ERROR",
 ]);
 
@@ -92,6 +101,7 @@ export type RegisterRequest = z.infer<typeof RegisterRequestSchema>;
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 export type TelegramAuthRequest = z.infer<typeof TelegramAuthRequestSchema>;
 export type AppleAuthRequest = z.infer<typeof AppleAuthRequestSchema>;
+export type VkAuthRequest = z.infer<typeof VkAuthRequestSchema>;
 export type AuthUser = z.infer<typeof AuthUserSchema>;
 export type AuthResponse = z.infer<typeof AuthResponseSchema>;
 export type AuthMeResponse = z.infer<typeof AuthMeResponseSchema>;

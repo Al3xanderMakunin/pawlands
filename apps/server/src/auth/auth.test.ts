@@ -1,6 +1,7 @@
 import { createHash, createHmac, createSign, generateKeyPairSync, randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { describe, expect, it } from "vitest";
+import type { VkAuthRequest } from "@pawlands/protocol";
 import { createApp } from "../app.js";
 import {
   AppleTokenVerificationError,
@@ -18,6 +19,7 @@ import {
   type YandexOAuthProvider,
   type YandexUserProfile,
 } from "./yandexOAuth.js";
+import type { VkIdProvider, VkUserProfile } from "./vkIdClient.js";
 
 class InMemoryAuthRepository implements AuthRepository {
   private users: UserRecord[] = [];
@@ -38,6 +40,11 @@ class InMemoryAuthRepository implements AuthRepository {
 
   async findByTelegramId(telegramId: string): Promise<UserRecord | null> {
     return this.users.find((u) => u.telegramId === telegramId) ?? null;
+  }
+
+  async findByVkId(vkId: string): Promise<UserRecord | null> {
+    const normalized = vkId.trim();
+    return this.users.find((u) => u.vkId === normalized) ?? null;
   }
 
   async findById(id: string): Promise<UserRecord | null> {
@@ -70,6 +77,7 @@ class InMemoryAuthRepository implements AuthRepository {
       username: input.username.trim(),
       passwordHash: input.passwordHash ?? null,
       googleId: input.googleId ?? null,
+      vkId: input.vkId ? input.vkId.trim() : null,
       role: input.role ?? "player",
       isBanned: false,
       banReason: null,
@@ -100,6 +108,16 @@ class InMemoryAuthRepository implements AuthRepository {
       throw new Error("User not found");
     }
     user.yandexId = yandexId;
+    user.updatedAt = new Date();
+    return user;
+  }
+
+  async linkVkId(userId: string, vkId: string): Promise<UserRecord> {
+    const user = this.users.find((u) => u.id === userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    user.vkId = vkId.trim();
     user.updatedAt = new Date();
     return user;
   }
@@ -158,6 +176,18 @@ function signTelegramPayload(
   const secretKey = createHash("sha256").update(botToken).digest();
   const hash = createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
   return { ...fields, hash };
+}
+
+class StubVkIdProvider implements VkIdProvider {
+  constructor(private readonly profilesByCode: Record<string, VkUserProfile>) {}
+
+  async exchangeCodeAndGetProfile(input: VkAuthRequest): Promise<VkUserProfile> {
+    const profile = this.profilesByCode[input.code];
+    if (!profile) {
+      throw new Error("Unexpected VK code");
+    }
+    return profile;
+  }
 }
 
 describe("password hashing", () => {
@@ -572,6 +602,105 @@ describe("auth HTTP routes", () => {
       });
       expect(linkedMeRes.statusCode).toBe(200);
       expect(linkedMeRes.json().user.username).toBe("ExistingCat");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("registers, logs in, and links existing accounts via VK ID", async () => {
+    const repo = new InMemoryAuthRepository();
+    const vkProvider = new StubVkIdProvider({
+      "code-new-ru": {
+        vkId: "9001",
+        email: null,
+        firstName: "Барсик",
+        lastName: "Котов",
+      },
+      "code-linked-email": {
+        vkId: "9002",
+        email: "whisker@pawlands.gg",
+        firstName: "Whisker",
+        lastName: "Cat",
+      },
+    });
+
+    const app = await createApp({
+      authRepository: repo,
+      vkIdProvider: vkProvider,
+      jwtSecret: "test-vk-secret",
+      logger: false,
+    });
+
+    try {
+      // 1. New user registration via VK ID (without email, Cyrillic name)
+      const vkRegisterRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/vk",
+        payload: {
+          code: "code-new-ru",
+          deviceId: "device-1",
+          codeVerifier: "v".repeat(43),
+          redirectUri: "http://localhost:5173/",
+        },
+      });
+
+      expect(vkRegisterRes.statusCode).toBe(200);
+      const vkUser = vkRegisterRes.json();
+      expect(vkUser.token).toBeTypeOf("string");
+      expect(vkUser.user.email).toBeNull();
+      expect(vkUser.user.username).toBe("barsik_kotov");
+
+      // 2. Subsequent login with same VK ID returns the same user
+      const vkReloginRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/vk",
+        payload: {
+          code: "code-new-ru",
+          deviceId: "device-1",
+          codeVerifier: "v".repeat(43),
+          redirectUri: "http://localhost:5173/",
+        },
+      });
+      expect(vkReloginRes.statusCode).toBe(200);
+      expect(vkReloginRes.json().user.id).toBe(vkUser.user.id);
+
+      // 3. /me works for VK user with null email
+      const meRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/me",
+        headers: {
+          authorization: `Bearer ${vkUser.token}`,
+        },
+      });
+      expect(meRes.statusCode).toBe(200);
+      expect(meRes.json().user.username).toBe("barsik_kotov");
+
+      // 4. Existing email/password user gets linked when signing in via VK ID with matching email
+      const emailRegRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: {
+          email: "whisker@pawlands.gg",
+          username: "Whisker_01",
+          password: "password123",
+        },
+      });
+      expect(emailRegRes.statusCode).toBe(201);
+      const existingId = emailRegRes.json().user.id;
+
+      const vkLinkRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/vk",
+        payload: {
+          code: "code-linked-email",
+          deviceId: "device-2",
+          codeVerifier: "v".repeat(43),
+          redirectUri: "http://localhost:5173/",
+        },
+      });
+      expect(vkLinkRes.statusCode).toBe(200);
+      expect(vkLinkRes.json().user.id).toBe(existingId);
+      expect(vkLinkRes.json().user.username).toBe("Whisker_01");
     } finally {
       await app.close();
     }

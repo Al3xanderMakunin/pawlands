@@ -46,6 +46,11 @@ class InMemoryStore implements AuthRepository, AdminRepository {
     return this.users.find((u) => u.telegramId === telegramId) ?? null;
   }
 
+  async findByVkId(vkId: string): Promise<UserRecord | null> {
+    const normalized = vkId.trim();
+    return this.users.find((u) => u.vkId === normalized) ?? null;
+  }
+
   async findById(id: string): Promise<UserRecord | null> {
     return this.users.find((u) => u.id === id) ?? null;
   }
@@ -71,6 +76,7 @@ class InMemoryStore implements AuthRepository, AdminRepository {
       passwordHash: input.passwordHash ?? null,
       googleId: input.googleId ?? null,
       yandexId: input.yandexId ?? null,
+      vkId: input.vkId ? input.vkId.trim() : null,
       role: input.role ?? "player",
       isBanned: false,
       banReason: null,
@@ -96,6 +102,14 @@ class InMemoryStore implements AuthRepository, AdminRepository {
     const user = this.users.find((u) => u.id === userId);
     if (!user) throw new Error("User not found");
     user.yandexId = yandexId;
+    user.updatedAt = new Date();
+    return user;
+  }
+
+  async linkVkId(userId: string, vkId: string): Promise<UserRecord> {
+    const user = this.users.find((u) => u.id === userId);
+    if (!user) throw new Error("User not found");
+    user.vkId = vkId.trim();
     user.updatedAt = new Date();
     return user;
   }

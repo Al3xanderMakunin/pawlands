@@ -4,6 +4,7 @@ import {
   LoginRequestSchema,
   RegisterRequestSchema,
   TelegramAuthRequestSchema,
+  VkAuthRequestSchema,
 } from "./auth.js";
 
 describe("auth protocol schemas", () => {
@@ -87,6 +88,26 @@ describe("auth protocol schemas", () => {
     expect(
       AppleAuthRequestSchema.safeParse({
         idToken: "",
+      }).success
+    ).toBe(false);
+  });
+
+  it("validates VK ID authorization code exchange payload", () => {
+    expect(
+      VkAuthRequestSchema.safeParse({
+        code: "vk2.a.test-code",
+        deviceId: "device-123",
+        codeVerifier: "a".repeat(43),
+        redirectUri: "http://localhost:5173/",
+      }).success
+    ).toBe(true);
+
+    expect(
+      VkAuthRequestSchema.safeParse({
+        code: "vk2.a.test-code",
+        deviceId: "device-123",
+        codeVerifier: "too-short",
+        redirectUri: "not-a-url",
       }).success
     ).toBe(false);
   });

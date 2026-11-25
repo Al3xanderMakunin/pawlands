@@ -10,6 +10,7 @@ import {
   type LoginRequest,
   type RegisterRequest,
   type TelegramAuthRequest,
+  type VkAuthRequest,
 } from "@pawlands/protocol";
 
 const apiUrl = (import.meta.env.VITE_API_URL ?? "http://localhost:2567").replace(/\/+$/, "");
@@ -124,6 +125,19 @@ export async function fetchAuthProviders(): Promise<AuthProvidersResponse> {
 
 export async function loginWithAppleAccount(payload: AppleAuthRequest): Promise<AuthResponse> {
   const response = await requestJson("/api/v1/auth/apple", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await parseErrorResponse(response);
+  }
+
+  return AuthResponseSchema.parse(await response.json());
+}
+
+export async function authenticateWithVk(payload: VkAuthRequest): Promise<AuthResponse> {
+  const response = await requestJson("/api/v1/auth/vk", {
     method: "POST",
     body: JSON.stringify(payload),
   });
