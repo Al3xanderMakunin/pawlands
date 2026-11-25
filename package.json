@@ -1,6 +1,6 @@
 {
   "name": "pawlands",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Open-source multiplayer 2D pixel-art survival RPG featuring cats, an open world, real-time PvP, quests, crafting, and exploration.",
   "license": "AGPL-3.0-only",
