@@ -12,9 +12,12 @@
     "build": "pnpm --filter './packages/*' build && pnpm --filter './apps/*' build",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
     "clean": "pnpm -r clean"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "typescript": "^5.9.3",
     "vitest": "^5.1.1"
   }
