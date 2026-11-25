@@ -1,40 +1,45 @@
-import Phaser from "phaser";
+import type Phaser from "phaser";
 import type { MovementInputState } from "./InputTypes";
 
+export interface KeyboardEventTarget {
+  addEventListener(type: string, listener: EventListenerOrEventListenerObject): void;
+  removeEventListener(type: string, listener: EventListenerOrEventListenerObject): void;
+}
+
+const PREVENT_DEFAULT_CODES = new Set([
+  "Space",
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+]);
+
+/**
+ * Samples keyboard movement and action state using physical `KeyboardEvent.code`
+ * values so controls work identically across QWERTY, Colemak, Dvorak, and
+ * non-Latin keyboard layouts.
+ */
 export class KeyboardInput {
-  private readonly cursors: Phaser.Types.Input.Keyboard.CursorKeys | null;
-  private readonly keys: {
-    w: Phaser.Input.Keyboard.Key;
-    a: Phaser.Input.Keyboard.Key;
-    s: Phaser.Input.Keyboard.Key;
-    d: Phaser.Input.Keyboard.Key;
-    shift: Phaser.Input.Keyboard.Key;
-    e: Phaser.Input.Keyboard.Key;
-    space: Phaser.Input.Keyboard.Key;
-  } | null;
+  private readonly target: KeyboardEventTarget | null;
+  private readonly pressedCodes = new Set<string>();
+  private attackQueued = false;
+  private interactQueued = false;
 
-  constructor(scene: Phaser.Scene) {
-    const keyboard = scene.input.keyboard;
-    if (!keyboard) {
-      this.cursors = null;
-      this.keys = null;
-      return;
-    }
+  constructor(_scene?: Phaser.Scene, target?: KeyboardEventTarget | null) {
+    this.target =
+      target !== undefined ? target : typeof window !== "undefined" ? window : null;
 
-    this.cursors = keyboard.createCursorKeys();
-    this.keys = {
-      w: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      a: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      s: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-      d: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-      shift: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
-      e: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
-      space: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
-    };
+    if (!this.target) return;
+
+    this.target.addEventListener("keydown", this.handleKeyDown);
+    this.target.addEventListener("keyup", this.handleKeyUp);
+    this.target.addEventListener("blur", this.handleBlur);
   }
 
   public sample(): MovementInputState {
-    if (!this.cursors || !this.keys || this.isTextInputFocused()) {
+    if (!this.target || this.isTextInputFocused()) {
+      this.attackQueued = false;
+      this.interactQueued = false;
       return {
         moveX: 0,
         moveY: 0,
@@ -47,24 +52,81 @@ export class KeyboardInput {
     let moveX = 0;
     let moveY = 0;
 
-    if (this.cursors.left.isDown || this.keys.a.isDown) moveX -= 1;
-    if (this.cursors.right.isDown || this.keys.d.isDown) moveX += 1;
-    if (this.cursors.up.isDown || this.keys.w.isDown) moveY -= 1;
-    if (this.cursors.down.isDown || this.keys.s.isDown) moveY += 1;
+    if (this.isAnyDown("ArrowLeft", "KeyA")) moveX -= 1;
+    if (this.isAnyDown("ArrowRight", "KeyD")) moveX += 1;
+    if (this.isAnyDown("ArrowUp", "KeyW")) moveY -= 1;
+    if (this.isAnyDown("ArrowDown", "KeyS")) moveY += 1;
+
+    const attackJustPressed = this.attackQueued;
+    const interactJustPressed = this.interactQueued;
+    this.attackQueued = false;
+    this.interactQueued = false;
 
     return {
       moveX,
       moveY,
-      sprint: this.keys.shift.isDown,
-      attackJustPressed: Phaser.Input.Keyboard.JustDown(this.keys.space),
-      interactJustPressed: Phaser.Input.Keyboard.JustDown(this.keys.e),
+      sprint: this.isAnyDown("ShiftLeft", "ShiftRight"),
+      attackJustPressed,
+      interactJustPressed,
     };
   }
 
+  public destroy(): void {
+    if (!this.target) return;
+    this.target.removeEventListener("keydown", this.handleKeyDown);
+    this.target.removeEventListener("keyup", this.handleKeyUp);
+    this.target.removeEventListener("blur", this.handleBlur);
+    this.pressedCodes.clear();
+    this.attackQueued = false;
+    this.interactQueued = false;
+  }
+
+  private readonly handleKeyDown = (rawEvent: Event): void => {
+    const event = rawEvent as KeyboardEvent;
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (this.isTextInputFocused()) return;
+
+    const code = event.code;
+    if (!code) return;
+
+    if (PREVENT_DEFAULT_CODES.has(code) && typeof event.preventDefault === "function") {
+      event.preventDefault();
+    }
+
+    this.pressedCodes.add(code);
+
+    if (!event.repeat) {
+      if (code === "Space") {
+        this.attackQueued = true;
+      } else if (code === "KeyE") {
+        this.interactQueued = true;
+      }
+    }
+  };
+
+  private readonly handleKeyUp = (rawEvent: Event): void => {
+    const event = rawEvent as KeyboardEvent;
+    if (event.code) {
+      this.pressedCodes.delete(event.code);
+    }
+  };
+
+  private readonly handleBlur = (): void => {
+    this.pressedCodes.clear();
+    this.attackQueued = false;
+    this.interactQueued = false;
+  };
+
+  private isAnyDown(...codes: string[]): boolean {
+    return codes.some((code) => this.pressedCodes.has(code));
+  }
+
   private isTextInputFocused(): boolean {
-    const active = document.activeElement;
+    if (typeof document === "undefined") return false;
+    const active = document.activeElement as HTMLElement | null;
     if (!active) return false;
-    const tag = active.tagName.toLowerCase();
-    return tag === "input" || tag === "textarea";
+    if (active.isContentEditable) return true;
+    const tag = active.tagName?.toLowerCase();
+    return tag === "input" || tag === "textarea" || tag === "select";
   }
 }

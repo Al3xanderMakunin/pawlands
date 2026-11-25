@@ -73,6 +73,7 @@ export class WorldScene extends Phaser.Scene {
       this.scale.off("resize", this.handleResize, this);
       this.unsubscribeStore?.();
       this.unsubscribeStore = null;
+      this.keyboardInput.destroy();
       this.touchControls.destroy();
     });
   }
