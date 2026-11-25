@@ -7,6 +7,7 @@ import i18n from "../../i18n";
 import { PlayerEntity } from "../entities/PlayerEntity";
 import { KeyboardInput } from "../input/KeyboardInput";
 import { MouseInput } from "../input/MouseInput";
+import { buildMinimapTerrain, type MinimapMarker } from "../minimap/minimapData";
 import type { TouchControlsScene } from "./TouchControlsScene";
 
 export class WorldScene extends Phaser.Scene {
@@ -15,6 +16,10 @@ export class WorldScene extends Phaser.Scene {
   private mouseInput!: MouseInput;
   private unsubscribeStore: (() => void) | null = null;
   private actionClearTimer: Phaser.Time.TimerEvent | null = null;
+  private lastMinimapSyncAt = 0;
+  private lastMinimapX = Number.NaN;
+  private lastMinimapY = Number.NaN;
+  private lastMinimapFacing = "";
 
   constructor() {
     super({ key: "WorldScene" });
@@ -50,6 +55,9 @@ export class WorldScene extends Phaser.Scene {
     camera.startFollow(this.player.sprite, true, 0.14, 0.14);
     camera.setRoundPixels(true);
     this.updateCameraZoom(this.scale.width);
+
+    this.publishMinimapTerrain(map, store.currentZoneId);
+    this.syncMinimapPlayer(0, true);
 
     // Input controllers
     this.keyboardInput = new KeyboardInput(this);
@@ -143,6 +151,7 @@ export class WorldScene extends Phaser.Scene {
       sprintMultiplier;
 
     this.player.updateMovement(moveX, moveY, effectiveSpeed, isSprinting);
+    this.syncMinimapPlayer(_time, false);
 
     if (kb.attackJustPressed || touch.attackJustPressed) {
       this.player.playActionPulse("attack");
@@ -176,6 +185,89 @@ export class WorldScene extends Phaser.Scene {
     this.actionClearTimer?.remove(false);
     this.actionClearTimer = this.time.delayedCall(900, () => {
       useGameStore.getState().setLastActionLabel(null);
+    });
+  }
+
+  private publishMinimapTerrain(
+    map: Phaser.Tilemaps.Tilemap,
+    zoneId: ReturnType<typeof useGameStore.getState>["currentZoneId"]
+  ): void {
+    const extractLayerIds = (layerName: string): number[] => {
+      const layer = map.getLayer(layerName);
+      const ids: number[] = [];
+      for (let y = 0; y < map.height; y++) {
+        for (let x = 0; x < map.width; x++) {
+          const tile = layer?.data[y]?.[x];
+          ids.push(tile && tile.index > 0 ? tile.index : 0);
+        }
+      }
+      return ids;
+    };
+
+    const spawnsLayer = map.getObjectLayer("spawns");
+    const markers: MinimapMarker[] = [];
+    for (const obj of spawnsLayer?.objects ?? []) {
+      if (typeof obj.x !== "number" || typeof obj.y !== "number") continue;
+      const width = typeof obj.width === "number" ? obj.width : 0;
+      const height = typeof obj.height === "number" ? obj.height : 0;
+      const isPoint = Boolean(obj.point);
+      markers.push({
+        id: String(obj.id ?? obj.name ?? markers.length),
+        label: obj.name || "",
+        kind: obj.type === "portal" ? "portal" : "spawn",
+        x: isPoint ? obj.x : obj.x + width / 2,
+        y: isPoint ? obj.y : obj.y + height / 2,
+        width,
+        height,
+      });
+    }
+
+    const terrain = buildMinimapTerrain({
+      zoneId,
+      tilesWidth: map.width,
+      tilesHeight: map.height,
+      tileWidth: map.tileWidth,
+      tileHeight: map.tileHeight,
+      ground: extractLayerIds("ground"),
+      decor: extractLayerIds("decor"),
+      obstacles: extractLayerIds("obstacles"),
+      markers,
+    });
+
+    useGameStore.getState().setMinimapTerrain(terrain);
+  }
+
+  private syncMinimapPlayer(time: number, force: boolean): void {
+    if (!this.player) return;
+    if (!force && time - this.lastMinimapSyncAt < 33) return;
+
+    const x = this.player.sprite.x;
+    const y = this.player.sprite.y;
+    const facing = this.player.getFacing();
+
+    if (
+      !force &&
+      Math.abs(x - this.lastMinimapX) < 0.5 &&
+      Math.abs(y - this.lastMinimapY) < 0.5 &&
+      facing === this.lastMinimapFacing
+    ) {
+      return;
+    }
+
+    this.lastMinimapSyncAt = time;
+    this.lastMinimapX = x;
+    this.lastMinimapY = y;
+    this.lastMinimapFacing = facing;
+
+    const worldView = this.cameras.main.worldView;
+    useGameStore.getState().setMinimapPlayer({
+      x,
+      y,
+      facing,
+      viewportX: worldView.x,
+      viewportY: worldView.y,
+      viewportWidth: worldView.width,
+      viewportHeight: worldView.height,
     });
   }
 }

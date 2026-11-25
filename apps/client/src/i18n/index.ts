@@ -110,6 +110,14 @@ export const resources = {
         attack: "Attack!",
         interact: "Interact",
       },
+      minimap: {
+        title: "Map",
+        show: "Show map",
+        hide: "Hide map",
+        player: "You",
+        portal: "Portal",
+        spawn: "Spawn",
+      },
       auth: {
         signIn: "Sign In",
         signOut: "Sign Out",
@@ -293,6 +301,14 @@ export const resources = {
       actions: {
         attack: "Атака!",
         interact: "Взаимодействие",
+      },
+      minimap: {
+        title: "Карта",
+        show: "Показать карту",
+        hide: "Скрыть карту",
+        player: "Вы",
+        portal: "Портал",
+        spawn: "Точка входа",
       },
       auth: {
         signIn: "Войти",

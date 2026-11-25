@@ -6,6 +6,7 @@ import { useAdminStore } from "../stores/useAdminStore";
 import { useAuthStore } from "../stores/useAuthStore";
 import { useGameStore, type ConnectionStatus, type TouchControlsMode } from "../stores/useGameStore";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { Minimap } from "./Minimap";
 
 const NEXT_TOUCH_MODE: Record<TouchControlsMode, TouchControlsMode> = {
   auto: "on",
@@ -121,54 +122,58 @@ export function HudOverlay() {
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="pointer-events-auto flex flex-wrap items-center gap-2">
-        <LanguageSwitcher />
-        {user ? (
-          <div className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-slate-900/85 px-2.5 py-1 text-xs text-emerald-200 backdrop-blur">
-            <span className="font-semibold">@{user.username}</span>
-            {user.role === "admin" && (
+      {/* Quick Actions & Minimap */}
+      <div className="flex flex-col items-end gap-2">
+        <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-2">
+          <LanguageSwitcher />
+          {user ? (
+            <div className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-slate-900/85 px-2.5 py-1 text-xs text-emerald-200 backdrop-blur">
+              <span className="font-semibold">@{user.username}</span>
+              {user.role === "admin" && (
+                <button
+                  type="button"
+                  onClick={openAdminPanel}
+                  className="rounded border border-amber-500/60 bg-amber-500/20 px-2 py-0.5 text-[11px] font-semibold text-amber-300 hover:border-amber-400 hover:bg-amber-500/30"
+                >
+                  {t("admin.button")}
+                </button>
+              )}
               <button
                 type="button"
-                onClick={openAdminPanel}
-                className="rounded border border-amber-500/60 bg-amber-500/20 px-2 py-0.5 text-[11px] font-semibold text-amber-300 hover:border-amber-400 hover:bg-amber-500/30"
+                onClick={() => void logout()}
+                className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300 hover:border-slate-500"
               >
-                {t("admin.button")}
+                {t("auth.signOut")}
               </button>
-            )}
+            </div>
+          ) : (
             <button
               type="button"
-              onClick={() => void logout()}
-              className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300 hover:border-slate-500"
+              onClick={() => openAuthModal("login")}
+              className="rounded-lg border border-slate-700/80 bg-slate-900/85 px-2.5 py-1.5 text-xs font-medium text-slate-200 backdrop-blur hover:border-amber-400 hover:text-amber-200"
             >
-              {t("auth.signOut")}
+              {t("auth.signIn")}
             </button>
-          </div>
-        ) : (
+          )}
+          {isMobile && (
+            <button
+              type="button"
+              onClick={() => setTouchControlsMode(NEXT_TOUCH_MODE[touchControlsMode])}
+              className="rounded-lg border border-slate-700/80 bg-slate-900/85 px-2.5 py-1.5 text-xs font-medium text-slate-200 backdrop-blur hover:border-slate-500"
+            >
+              {t("touchPad")}: {t(`touchMode.${touchControlsMode}`)}
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => openAuthModal("login")}
-            className="rounded-lg border border-slate-700/80 bg-slate-900/85 px-2.5 py-1.5 text-xs font-medium text-slate-200 backdrop-blur hover:border-amber-400 hover:text-amber-200"
+            onClick={() => setArchetypeModalOpen(true)}
+            className="rounded-lg border border-amber-500/50 bg-slate-900/85 px-3 py-1.5 text-xs font-semibold text-amber-300 backdrop-blur hover:border-amber-400"
           >
-            {t("auth.signIn")}
+            {t("changeArchetype")}
           </button>
-        )}
-        {isMobile && (
-          <button
-            type="button"
-            onClick={() => setTouchControlsMode(NEXT_TOUCH_MODE[touchControlsMode])}
-            className="rounded-lg border border-slate-700/80 bg-slate-900/85 px-2.5 py-1.5 text-xs font-medium text-slate-200 backdrop-blur hover:border-slate-500"
-          >
-            {t("touchPad")}: {t(`touchMode.${touchControlsMode}`)}
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => setArchetypeModalOpen(true)}
-          className="rounded-lg border border-amber-500/50 bg-slate-900/85 px-3 py-1.5 text-xs font-semibold text-amber-300 backdrop-blur hover:border-amber-400"
-        >
-          {t("changeArchetype")}
-        </button>
+        </div>
+
+        <Minimap />
       </div>
     </header>
   );
