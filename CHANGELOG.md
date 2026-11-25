@@ -4,6 +4,44 @@ All notable changes to **Pawlands** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0](https://github.com/Al3xanderMakunin/pawlands/compare/v1.2.0...v1.3.0) (2026-11-25)
+
+
+### Features
+
+* **admin:** add admin panel, role/ban management, and zone controls ([6dbec50](https://github.com/Al3xanderMakunin/pawlands/commit/6dbec506c4be145421b6f8e6c255155cf5310464))
+* **auth:** add Google OAuth login and registration ([5eda364](https://github.com/Al3xanderMakunin/pawlands/commit/5eda364c995a41598ddecab5acd34142a6f1e9ba))
+* **auth:** add Sign in with Apple authentication ([af651d5](https://github.com/Al3xanderMakunin/pawlands/commit/af651d5b2aac5dfcead60df351bab03d6966e29d))
+* **auth:** add Telegram login and registration ([d0793b8](https://github.com/Al3xanderMakunin/pawlands/commit/d0793b8c742c194d76987a4d96e7060f7c98c611))
+* **auth:** add VK ID OAuth 2.1 PKCE login and registration ([1d74c7e](https://github.com/Al3xanderMakunin/pawlands/commit/1d74c7e4a0bc09433e63aa2ec4703fb725180a6f))
+* **auth:** add Yandex ID OAuth login and registration ([df2a5b6](https://github.com/Al3xanderMakunin/pawlands/commit/df2a5b6635b0720f8a228d43dd7a9f274f1ea22a))
+* **auth:** implement user registration and authentication ([ebc9ccc](https://github.com/Al3xanderMakunin/pawlands/commit/ebc9ccc7f4c5015156f92e9176c10d983b07f914))
+* **client:** add interactive HUD minimap ([1efb149](https://github.com/Al3xanderMakunin/pawlands/commit/1efb149b2ce3c4566f3418e9624b96282d9ebab3))
+* **client:** add mouse click-to-move navigation ([a0510d6](https://github.com/Al3xanderMakunin/pawlands/commit/a0510d6d47aa14640226e890e9a43e2064013683))
+* **client:** add opaque 180x180 Apple Touch Icon and iOS web app meta tags ([5c53bbe](https://github.com/Al3xanderMakunin/pawlands/commit/5c53bbeec00f24098b9fc442549033018e576c8e))
+* **client:** add open/close animations for modal windows ([1a92326](https://github.com/Al3xanderMakunin/pawlands/commit/1a9232632ad35e0f192c4dd2a3451351d6fab0f7))
+* **client:** add pixel-art paw favicon and web app icons ([013d5de](https://github.com/Al3xanderMakunin/pawlands/commit/013d5de2adde1a30f2824821a21daefb9486fff9))
+* **client:** add world selection for starting map ([f27862a](https://github.com/Al3xanderMakunin/pawlands/commit/f27862a76dcc1690a418228b2d9d2fb4d49f5f56))
+* **client:** inject all Vite env variables at runtime ([e3b593c](https://github.com/Al3xanderMakunin/pawlands/commit/e3b593cf733c71ac3483c385a0961cbede924ce6))
+* **client:** inject VITE_TELEGRAM_BOT_USERNAME at container runtime ([88f6d83](https://github.com/Al3xanderMakunin/pawlands/commit/88f6d83a49371a9c26149ca059a711d68147fd30))
+* **client:** добавить движение по касанию карты ([0a89542](https://github.com/Al3xanderMakunin/pawlands/commit/0a895426088c622cbaf40c4121911dfc7811aa44))
+* **server:** run database migrations automatically on startup ([4cf2377](https://github.com/Al3xanderMakunin/pawlands/commit/4cf23773d3d54178237c4f8e7bb0697ee3f32fa3))
+
+
+### Bug Fixes
+
+* **client:** fit character selection modal on mobile Safari ([6861140](https://github.com/Al3xanderMakunin/pawlands/commit/6861140faa2becd7c40788168164c4d453228cd8))
+* **client:** make auth modal scrollable on desktop viewports ([5ba6f53](https://github.com/Al3xanderMakunin/pawlands/commit/5ba6f53105c689bcfdb6eaf50907c6f43ae1e34b))
+* **client:** pass VITE_TELEGRAM_BOT_USERNAME in Dockerfile and strip leading @ ([2d23d40](https://github.com/Al3xanderMakunin/pawlands/commit/2d23d407a10dbf523af232b2bcddafc8d6f0b750))
+* **client:** render touch controls at 1x scale with safe-area insets ([f275005](https://github.com/Al3xanderMakunin/pawlands/commit/f2750057908b9dacd8ae2f599845f6e036ec3140))
+* **client:** separate desktop and mobile UI hints and controls ([f40cedb](https://github.com/Al3xanderMakunin/pawlands/commit/f40cedb54d383f649538b9d17b8ffc7c24ae7ab5))
+* **server:** add missing Drizzle migration for users OAuth columns ([d003392](https://github.com/Al3xanderMakunin/pawlands/commit/d0033923e3205f6201fa3ad45f4eefbf391b9fcb))
+
+
+### Performance Improvements
+
+* **build,test:** enable incremental ts builds, split client chunks, and optimize vitest ([accd805](https://github.com/Al3xanderMakunin/pawlands/commit/accd80522ab806e75d124e55e01abdb8d7b8e3b5))
+
 ## [1.2.0](https://github.com/Al3xanderMakunin/pawlands/compare/v1.1.0...v1.2.0) (2026-11-25)
 
 
