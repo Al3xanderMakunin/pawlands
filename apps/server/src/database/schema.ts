@@ -17,6 +17,7 @@ export const users = pgTable("users", {
   role: text("role").default("player").notNull(),
   isBanned: boolean("is_banned").default(false).notNull(),
   banReason: text("ban_reason"),
+  yandexId: text("yandex_id").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

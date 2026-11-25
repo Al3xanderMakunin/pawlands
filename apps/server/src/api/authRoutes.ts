@@ -9,12 +9,26 @@ import {
   type GoogleOAuthConfig,
 } from "../auth/googleOAuth.js";
 import { extractBearerToken } from "./authHelpers.js";
+import type { YandexOAuthProvider } from "../auth/yandexOAuth.js";
 
 export interface AuthRoutesOptions {
   jwtSecret: string;
   appUrl: string;
+  clientUrl?: string;
   googleOAuthConfig: GoogleOAuthConfig | null;
   googleOAuthClient: GoogleOAuthClient;
+  yandexOAuth?: YandexOAuthProvider;
+}
+
+function resolveClientRedirectUrl(options: AuthRoutesOptions): string {
+  const raw = options.clientUrl ?? options.appUrl;
+  return raw.trim().replace(/\/+$/, "");
+}
+
+function resolveCallbackRedirectUri(request: FastifyRequest): string | undefined {
+  const host = request.headers.host;
+  if (!host) return undefined;
+  return `${request.protocol}://${host}/api/v1/auth/yandex/callback`;
 }
 
 function handleAuthRouteError(err: unknown, reply: FastifyReply, request: FastifyRequest) {
@@ -144,6 +158,55 @@ export async function registerAuthRoutes(
       }
       request.log.error(err, "Google OAuth callback error");
       return redirectWithFragment({ auth_error: "GOOGLE_AUTH_FAILED" });
+    }
+  });
+
+  fastify.get("/api/v1/auth/yandex", async (request, reply) => {
+    const clientUrl = resolveClientRedirectUrl(options);
+    const yandexOAuth = options.yandexOAuth;
+
+    if (!yandexOAuth || !yandexOAuth.isConfigured() || !options.jwtSecret) {
+      return reply.redirect(`${clientUrl}/#auth_error=YANDEX_NOT_CONFIGURED`);
+    }
+
+    const state = yandexOAuth.createState(options.jwtSecret);
+    const redirectUri = resolveCallbackRedirectUri(request);
+    const authorizationUrl = yandexOAuth.getAuthorizationUrl(state, redirectUri);
+    return reply.redirect(authorizationUrl);
+  });
+
+  fastify.get("/api/v1/auth/yandex/callback", async (request, reply) => {
+    const clientUrl = resolveClientRedirectUrl(options);
+    const yandexOAuth = options.yandexOAuth;
+    const query = (request.query ?? {}) as {
+      code?: string;
+      state?: string;
+      error?: string;
+    };
+
+    if (query.error) {
+      const errorCode =
+        query.error === "access_denied" ? "YANDEX_ACCESS_DENIED" : "YANDEX_AUTH_FAILED";
+      return reply.redirect(`${clientUrl}/#auth_error=${errorCode}`);
+    }
+
+    if (!yandexOAuth || !yandexOAuth.isConfigured() || !options.jwtSecret) {
+      return reply.redirect(`${clientUrl}/#auth_error=YANDEX_NOT_CONFIGURED`);
+    }
+
+    if (!query.code || !query.state || !yandexOAuth.verifyState(query.state, options.jwtSecret)) {
+      return reply.redirect(`${clientUrl}/#auth_error=YANDEX_INVALID_STATE`);
+    }
+
+    try {
+      const redirectUri = resolveCallbackRedirectUri(request);
+      const profile = await yandexOAuth.exchangeCodeForProfile(query.code, redirectUri);
+      const result = await authService.authenticateWithYandex(profile);
+      return reply.redirect(`${clientUrl}/#auth_token=${encodeURIComponent(result.token)}`);
+    } catch (err) {
+      request.log.error(err, "Yandex ID OAuth callback failed");
+      const errorCode = err instanceof AuthError ? err.code : "YANDEX_AUTH_FAILED";
+      return reply.redirect(`${clientUrl}/#auth_error=${errorCode}`);
     }
   });
 }

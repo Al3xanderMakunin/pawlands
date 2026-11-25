@@ -10,6 +10,10 @@ import {
 
 const apiUrl = (import.meta.env.VITE_API_URL ?? "http://localhost:2567").replace(/\/+$/, "");
 
+export function getYandexAuthUrl(): string {
+  return `${apiUrl}/api/v1/auth/yandex`;
+}
+
 export class AuthApiError extends Error {
   readonly code: AuthErrorCode | "NETWORK_ERROR";
   readonly status?: number;

@@ -15,13 +15,20 @@ import {
   type GoogleOAuthConfig,
 } from "./auth/googleOAuth.js";
 import { resolveJwtSecret } from "./auth/jwt.js";
+import {
+  resolveYandexOAuthConfig,
+  YandexOAuthClient,
+  type YandexOAuthProvider,
+} from "./auth/yandexOAuth.js";
 
 export interface CreateAppOptions {
   authRepository?: AuthRepository;
   adminRepository?: AdminRepository;
+  yandexOAuth?: YandexOAuthProvider;
   jwtSecret?: string;
   corsOrigin?: string | boolean;
   appUrl?: string;
+  clientUrl?: string;
   googleOAuthConfig?: GoogleOAuthConfig | null;
   googleOAuthClient?: GoogleOAuthClient;
   logger?: boolean;
@@ -55,12 +62,15 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const googleOAuthClient = options.googleOAuthClient ?? new FetchGoogleOAuthClient();
   const appUrl = resolveAppUrl(options.appUrl);
   const adminService = new AdminService(adminRepository);
+  const yandexOAuth = options.yandexOAuth ?? new YandexOAuthClient(resolveYandexOAuthConfig());
 
   await registerAuthRoutes(fastify, authService, {
     jwtSecret,
     appUrl,
+    clientUrl: options.clientUrl,
     googleOAuthConfig,
     googleOAuthClient,
+    yandexOAuth,
   });
   await registerAdminRoutes(fastify, authService, adminService);
 

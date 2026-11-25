@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import type { AuthErrorCode, AuthUser, LoginRequest, RegisterRequest } from "@pawlands/protocol";
+import {
+  AuthErrorCodeSchema,
+  type AuthErrorCode,
+  type AuthUser,
+  type LoginRequest,
+  type RegisterRequest,
+} from "@pawlands/protocol";
 import { useAdminStore } from "./useAdminStore";
 import {
   AuthApiError,
@@ -55,6 +61,7 @@ interface AuthStoreState {
   startGoogleAuth: () => void;
   logout: () => Promise<void>;
   restoreSession: () => Promise<void>;
+  handleOAuthCallbackFromUrl: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthStoreState>((set, get) => ({
@@ -192,5 +199,62 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         set({ isRestoring: false });
       }
     }
+  },
+
+  handleOAuthCallbackFromUrl: async () => {
+    if (typeof window === "undefined") {
+      await get().restoreSession();
+      return;
+    }
+
+    const hash = window.location.hash;
+    if (!hash || (!hash.includes("auth_token=") && !hash.includes("auth_error="))) {
+      await get().restoreSession();
+      return;
+    }
+
+    const params = new URLSearchParams(hash.slice(1));
+    const authToken = params.get("auth_token");
+    const authError = params.get("auth_error");
+
+    window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+
+    if (authError) {
+      const parsedError = AuthErrorCodeSchema.safeParse(authError);
+      set({
+        isAuthModalOpen: true,
+        errorCode: parsedError.success ? parsedError.data : "YANDEX_AUTH_FAILED",
+      });
+      await get().restoreSession();
+      return;
+    }
+
+    if (authToken) {
+      writeStoredToken(authToken);
+      set({ isRestoring: true, errorCode: null });
+      try {
+        const user = await fetchCurrentUser(authToken);
+        set({
+          user,
+          token: authToken,
+          isRestoring: false,
+          isAuthModalOpen: false,
+          errorCode: null,
+        });
+      } catch (err) {
+        writeStoredToken(null);
+        const code = err instanceof AuthApiError ? err.code : "YANDEX_AUTH_FAILED";
+        set({
+          user: null,
+          token: null,
+          isRestoring: false,
+          isAuthModalOpen: true,
+          errorCode: code,
+        });
+      }
+      return;
+    }
+
+    await get().restoreSession();
   },
 }));

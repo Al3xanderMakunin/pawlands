@@ -5,6 +5,11 @@ import type { AuthRepository, CreateUserInput, UserRecord } from "./authReposito
 import type { GoogleOAuthClient, GoogleOAuthConfig, GoogleUserProfile } from "./googleOAuth.js";
 import { signAuthToken, verifyAuthToken } from "./jwt.js";
 import { hashPassword, verifyPassword } from "./password.js";
+import {
+  YandexOAuthClient,
+  type YandexOAuthProvider,
+  type YandexUserProfile,
+} from "./yandexOAuth.js";
 
 class InMemoryAuthRepository implements AuthRepository {
   private users: UserRecord[] = [];
@@ -27,6 +32,10 @@ class InMemoryAuthRepository implements AuthRepository {
     return this.users.find((u) => u.id === id) ?? null;
   }
 
+  async findByYandexId(yandexId: string): Promise<UserRecord | null> {
+    return this.users.find((u) => u.yandexId === yandexId) ?? null;
+  }
+
   async createUser(input: CreateUserInput): Promise<UserRecord> {
     const now = new Date();
     const record: UserRecord = {
@@ -38,6 +47,7 @@ class InMemoryAuthRepository implements AuthRepository {
       role: input.role ?? "player",
       isBanned: false,
       banReason: null,
+      yandexId: input.yandexId ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -53,6 +63,50 @@ class InMemoryAuthRepository implements AuthRepository {
     user.googleId = googleId;
     user.updatedAt = new Date();
     return user;
+  }
+
+  async linkYandexAccount(userId: string, yandexId: string): Promise<UserRecord> {
+    const user = this.users.find((u) => u.id === userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    user.yandexId = yandexId;
+    user.updatedAt = new Date();
+    return user;
+  }
+}
+
+class MockYandexOAuthProvider implements YandexOAuthProvider {
+  private readonly inner = new YandexOAuthClient({
+    clientId: "test-yandex-client-id",
+    clientSecret: "test-yandex-client-secret",
+    redirectUri: "http://localhost:2567/api/v1/auth/yandex/callback",
+  });
+
+  constructor(private readonly profilesByCode: Record<string, YandexUserProfile>) {}
+
+  isConfigured(): boolean {
+    return true;
+  }
+
+  createState(secret: string, ttlSec?: number): string {
+    return this.inner.createState(secret, ttlSec);
+  }
+
+  verifyState(state: string, secret: string): boolean {
+    return this.inner.verifyState(state, secret);
+  }
+
+  getAuthorizationUrl(state: string, redirectUri?: string): string {
+    return this.inner.getAuthorizationUrl(state, redirectUri);
+  }
+
+  async exchangeCodeForProfile(code: string): Promise<YandexUserProfile> {
+    const profile = this.profilesByCode[code];
+    if (!profile) {
+      throw new Error("Unexpected OAuth code");
+    }
+    return profile;
   }
 }
 
@@ -329,6 +383,218 @@ describe("auth HTTP routes", () => {
       });
       expect(linkedMeRes.statusCode).toBe(200);
       expect(linkedMeRes.json().user.username).toBe("ExistingCat");
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe("Yandex ID OAuth", () => {
+  it("creates and verifies signed OAuth state tokens and builds authorization URL", () => {
+    const client = new YandexOAuthClient({
+      clientId: "yandex-client-123",
+      clientSecret: "yandex-secret-456",
+      redirectUri: "http://localhost:2567/api/v1/auth/yandex/callback",
+    });
+
+    expect(client.isConfigured()).toBe(true);
+
+    const state = client.createState("state-secret", 300);
+    expect(client.verifyState(state, "state-secret")).toBe(true);
+    expect(client.verifyState(state, "wrong-secret")).toBe(false);
+    expect(client.verifyState(`${state}x`, "state-secret")).toBe(false);
+
+    const expired = client.createState("state-secret", -10);
+    expect(client.verifyState(expired, "state-secret")).toBe(false);
+
+    const authUrl = new URL(client.getAuthorizationUrl(state));
+    expect(authUrl.origin).toBe("https://oauth.yandex.ru");
+    expect(authUrl.pathname).toBe("/authorize");
+    expect(authUrl.searchParams.get("response_type")).toBe("code");
+    expect(authUrl.searchParams.get("client_id")).toBe("yandex-client-123");
+    expect(authUrl.searchParams.get("state")).toBe(state);
+    expect(authUrl.searchParams.get("redirect_uri")).toBe(
+      "http://localhost:2567/api/v1/auth/yandex/callback"
+    );
+  });
+
+  it("redirects with YANDEX_NOT_CONFIGURED when Yandex credentials are missing", async () => {
+    const app = await createApp({
+      authRepository: new InMemoryAuthRepository(),
+      yandexOAuth: new YandexOAuthClient({ clientId: "", clientSecret: "" }),
+      jwtSecret: "test-route-secret",
+      clientUrl: "http://localhost:5173",
+      logger: false,
+    });
+
+    try {
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/yandex",
+      });
+      expect(res.statusCode).toBe(302);
+      expect(res.headers.location).toBe("http://localhost:5173/#auth_error=YANDEX_NOT_CONFIGURED");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("registers, logs in, links existing email, and rejects password login for Yandex-only accounts", async () => {
+    const repo = new InMemoryAuthRepository();
+    const yandexOAuth = new MockYandexOAuthProvider({
+      "code-new-user": {
+        yandexId: "ya-1001",
+        email: "Murzik@Yandex.ru",
+        login: "murzik.cat",
+        displayName: "Murzik",
+      },
+      "code-collision-user": {
+        yandexId: "ya-1002",
+        email: "murzik2@yandex.ru",
+        login: "murzik.cat",
+        displayName: "Murzik Two",
+      },
+      "code-existing-email": {
+        yandexId: "ya-1003",
+        email: "whisker@pawlands.gg",
+        login: "whisker_ya",
+        displayName: "Whisker",
+      },
+    });
+
+    const app = await createApp({
+      authRepository: repo,
+      yandexOAuth,
+      jwtSecret: "test-route-secret",
+      clientUrl: "http://localhost:5173",
+      logger: false,
+    });
+
+    try {
+      // 1. Start Yandex OAuth flow
+      const startRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/yandex",
+      });
+      expect(startRes.statusCode).toBe(302);
+      const authorizeUrl = new URL(startRes.headers.location as string);
+      const state = authorizeUrl.searchParams.get("state");
+      expect(state).toBeTruthy();
+
+      // 2. Callback with access_denied
+      const deniedRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/yandex/callback?error=access_denied",
+      });
+      expect(deniedRes.statusCode).toBe(302);
+      expect(deniedRes.headers.location).toBe(
+        "http://localhost:5173/#auth_error=YANDEX_ACCESS_DENIED"
+      );
+
+      // 3. Callback with invalid state
+      const badStateRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/yandex/callback?code=code-new-user&state=tampered",
+      });
+      expect(badStateRes.statusCode).toBe(302);
+      expect(badStateRes.headers.location).toBe(
+        "http://localhost:5173/#auth_error=YANDEX_INVALID_STATE"
+      );
+
+      // 4. Register new user via Yandex ID
+      const registerCallbackRes = await app.inject({
+        method: "GET",
+        url: `/api/v1/auth/yandex/callback?code=code-new-user&state=${encodeURIComponent(state!)}`,
+      });
+      expect(registerCallbackRes.statusCode).toBe(302);
+      const registerLocation = registerCallbackRes.headers.location as string;
+      expect(registerLocation.startsWith("http://localhost:5173/#auth_token=")).toBe(true);
+
+      const token1 = decodeURIComponent(registerLocation.split("#auth_token=")[1]!);
+      const me1Res = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/me",
+        headers: { authorization: `Bearer ${token1}` },
+      });
+      expect(me1Res.statusCode).toBe(200);
+      expect(me1Res.json().user.email).toBe("murzik@yandex.ru");
+      expect(me1Res.json().user.username).toBe("murzik_cat");
+
+      // 5. Password login for Yandex-only account fails cleanly with 401
+      const pwdLoginRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: {
+          identifier: "murzik_cat",
+          password: "any-password",
+        },
+      });
+      expect(pwdLoginRes.statusCode).toBe(401);
+      expect(pwdLoginRes.json().error).toBe("INVALID_CREDENTIALS");
+
+      // 6. Second login with same Yandex ID reuses existing account
+      const loginAgainRes = await app.inject({
+        method: "GET",
+        url: `/api/v1/auth/yandex/callback?code=code-new-user&state=${encodeURIComponent(state!)}`,
+      });
+      expect(loginAgainRes.statusCode).toBe(302);
+      const token2 = decodeURIComponent(
+        (loginAgainRes.headers.location as string).split("#auth_token=")[1]!
+      );
+      const me2Res = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/me",
+        headers: { authorization: `Bearer ${token2}` },
+      });
+      expect(me2Res.statusCode).toBe(200);
+      expect(me2Res.json().user.id).toBe(me1Res.json().user.id);
+
+      // 7. Username collision generates unique username
+      const collisionRes = await app.inject({
+        method: "GET",
+        url: `/api/v1/auth/yandex/callback?code=code-collision-user&state=${encodeURIComponent(state!)}`,
+      });
+      expect(collisionRes.statusCode).toBe(302);
+      const tokenCollision = decodeURIComponent(
+        (collisionRes.headers.location as string).split("#auth_token=")[1]!
+      );
+      const meCollisionRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/me",
+        headers: { authorization: `Bearer ${tokenCollision}` },
+      });
+      expect(meCollisionRes.statusCode).toBe(200);
+      expect(meCollisionRes.json().user.username).toMatch(/^murzik_cat_\d{4}$/);
+
+      // 8. Linking Yandex ID to an existing email/password account
+      const existingReg = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: {
+          email: "whisker@pawlands.gg",
+          username: "Whisker_01",
+          password: "password123",
+        },
+      });
+      expect(existingReg.statusCode).toBe(201);
+      const existingUserId = existingReg.json().user.id;
+
+      const linkRes = await app.inject({
+        method: "GET",
+        url: `/api/v1/auth/yandex/callback?code=code-existing-email&state=${encodeURIComponent(state!)}`,
+      });
+      expect(linkRes.statusCode).toBe(302);
+      const tokenLinked = decodeURIComponent(
+        (linkRes.headers.location as string).split("#auth_token=")[1]!
+      );
+      const meLinkedRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/me",
+        headers: { authorization: `Bearer ${tokenLinked}` },
+      });
+      expect(meLinkedRes.statusCode).toBe(200);
+      expect(meLinkedRes.json().user.id).toBe(existingUserId);
+      expect(meLinkedRes.json().user.username).toBe("Whisker_01");
     } finally {
       await app.close();
     }

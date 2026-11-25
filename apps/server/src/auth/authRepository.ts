@@ -12,6 +12,7 @@ export interface UserRecord {
   role: UserRole;
   isBanned: boolean;
   banReason: string | null;
+  yandexId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -22,6 +23,7 @@ export interface CreateUserInput {
   passwordHash?: string | null;
   googleId?: string | null;
   role?: UserRole;
+  yandexId?: string | null;
 }
 
 function normalizeRole(role: string): UserRole {
@@ -38,6 +40,7 @@ function toUserRecord(row: typeof users.$inferSelect): UserRecord {
     username: row.username,
     passwordHash: row.passwordHash,
     googleId: row.googleId,
+    yandexId: row.yandexId,
     role: normalizeRole(row.role),
     isBanned: row.isBanned,
     banReason: row.banReason ?? null,
@@ -51,8 +54,10 @@ export interface AuthRepository {
   findByUsername(username: string): Promise<UserRecord | null>;
   findByGoogleId(googleId: string): Promise<UserRecord | null>;
   findById(id: string): Promise<UserRecord | null>;
+  findByYandexId(yandexId: string): Promise<UserRecord | null>;
   createUser(input: CreateUserInput): Promise<UserRecord>;
   linkGoogleAccount(userId: string, googleId: string): Promise<UserRecord>;
+  linkYandexAccount(userId: string, yandexId: string): Promise<UserRecord>;
 }
 
 export class DrizzleAuthRepository implements AuthRepository {
@@ -90,6 +95,15 @@ export class DrizzleAuthRepository implements AuthRepository {
     return row ? toUserRecord(row) : null;
   }
 
+  async findByYandexId(yandexId: string): Promise<UserRecord | null> {
+    const [row] = await db
+      .select()
+      .from(users)
+      .where(eq(users.yandexId, yandexId))
+      .limit(1);
+    return row ? toUserRecord(row) : null;
+  }
+
   async createUser(input: CreateUserInput): Promise<UserRecord> {
     const [created] = await db
       .insert(users)
@@ -99,6 +113,7 @@ export class DrizzleAuthRepository implements AuthRepository {
         passwordHash: input.passwordHash ?? null,
         googleId: input.googleId ?? null,
         role: input.role ?? "player",
+        yandexId: input.yandexId ?? null,
       })
       .returning();
 
@@ -121,6 +136,23 @@ export class DrizzleAuthRepository implements AuthRepository {
 
     if (!updated) {
       throw new Error("Failed to link Google account");
+    }
+
+    return toUserRecord(updated);
+  }
+
+  async linkYandexAccount(userId: string, yandexId: string): Promise<UserRecord> {
+    const [updated] = await db
+      .update(users)
+      .set({
+        yandexId,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+
+    if (!updated) {
+      throw new Error("Failed to link Yandex account");
     }
 
     return toUserRecord(updated);

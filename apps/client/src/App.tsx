@@ -10,7 +10,7 @@ export function App() {
   const canvasHostRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    void useAuthStore.getState().restoreSession();
+    void useAuthStore.getState().handleOAuthCallbackFromUrl();
   }, []);
 
   useEffect(() => {

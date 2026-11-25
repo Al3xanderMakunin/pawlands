@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import type {
   AuthErrorCode,
   AuthResponse,
@@ -11,6 +11,7 @@ import type { AuthRepository, UserRecord } from "./authRepository.js";
 import type { GoogleUserProfile } from "./googleOAuth.js";
 import { signAuthToken, verifyAuthToken } from "./jwt.js";
 import { hashPassword, verifyPassword } from "./password.js";
+import type { YandexUserProfile } from "./yandexOAuth.js";
 
 export class AuthError extends Error {
   readonly code: AuthErrorCode;
@@ -44,6 +45,21 @@ function isBootstrapAdminEmail(email: string): boolean {
     .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean)
     .includes(normalized);
+}
+
+function sanitizeUsernameBase(raw: string): string {
+  const cleaned = raw
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^[_-]+|[_-]+$/g, "")
+    .slice(0, 24);
+
+  if (cleaned.length >= 3) {
+    return cleaned;
+  }
+
+  return "yandex_cat";
 }
 
 function isPgUniqueViolation(err: unknown): { constraint?: string } | null {
@@ -138,6 +154,104 @@ export class AuthService {
       );
     }
 
+    return this.buildAuthResponse(user);
+  }
+
+  async authenticateWithYandex(profile: YandexUserProfile): Promise<AuthResponse> {
+    const existingByYandexId = await this.repository.findByYandexId(profile.yandexId);
+    if (existingByYandexId) {
+      if (existingByYandexId.isBanned) {
+        throw new AuthError(
+          "ACCOUNT_BANNED",
+          existingByYandexId.banReason
+            ? `Account is banned: ${existingByYandexId.banReason}`
+            : "Account is banned",
+          403
+        );
+      }
+      return this.buildAuthResponse(existingByYandexId);
+    }
+
+    const normalizedEmail = (
+      profile.email ?? `yandex_${profile.yandexId}@yandex.id.local`
+    )
+      .trim()
+      .toLowerCase();
+
+    const existingByEmail = await this.repository.findByEmail(normalizedEmail);
+    if (existingByEmail) {
+      if (existingByEmail.isBanned) {
+        throw new AuthError(
+          "ACCOUNT_BANNED",
+          existingByEmail.banReason
+            ? `Account is banned: ${existingByEmail.banReason}`
+            : "Account is banned",
+          403
+        );
+      }
+      if (existingByEmail.yandexId && existingByEmail.yandexId !== profile.yandexId) {
+        throw new AuthError(
+          "EMAIL_TAKEN",
+          "An account with this email is already linked to another Yandex ID",
+          409
+        );
+      }
+      const linked = await this.repository.linkYandexAccount(
+        existingByEmail.id,
+        profile.yandexId
+      );
+      return this.buildAuthResponse(linked);
+    }
+
+    const baseUsername = sanitizeUsernameBase(
+      profile.login ?? profile.displayName ?? normalizedEmail.split("@")[0] ?? "yandex_cat"
+    );
+
+    const maxAttempts = 10;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const candidate = await this.pickAvailableUsername(baseUsername, attempt);
+      try {
+        const created = await this.repository.createUser({
+          email: normalizedEmail,
+          username: candidate,
+          passwordHash: null,
+          yandexId: profile.yandexId,
+          role: isBootstrapAdminEmail(normalizedEmail) ? "admin" : "player",
+        });
+        return this.buildAuthResponse(created);
+      } catch (err) {
+        const uniqueErr = isPgUniqueViolation(err);
+        if (uniqueErr?.constraint?.includes("username") && attempt < maxAttempts - 1) {
+          continue;
+        }
+        if (uniqueErr) {
+          throw new AuthError("EMAIL_TAKEN", "An account with this email already exists", 409);
+        }
+        throw err;
+      }
+    }
+
+    throw new AuthError("YANDEX_AUTH_FAILED", "Could not allocate a unique username", 500);
+  }
+
+  private async pickAvailableUsername(base: string, attempt: number): Promise<string> {
+    if (attempt === 0) {
+      const existing = await this.repository.findByUsername(base);
+      if (!existing) return base;
+    }
+
+    for (let i = 0; i < 5; i += 1) {
+      const suffix = `_${randomInt(1000, 9999)}`;
+      const candidate = `${base.slice(0, 24 - suffix.length)}${suffix}`;
+      const existing = await this.repository.findByUsername(candidate);
+      if (!existing) return candidate;
+    }
+
+    const fallbackSuffix = `_${randomInt(100000, 999999)}`;
+    return `${base.slice(0, 24 - fallbackSuffix.length)}${fallbackSuffix}`;
+  }
+
+  private buildAuthResponse(user: UserRecord): AuthResponse {
     const token = signAuthToken(
       {
         sub: user.id,
