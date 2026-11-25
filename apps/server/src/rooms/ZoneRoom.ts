@@ -1,7 +1,6 @@
 import { Room, ServerError, type Client } from "@colyseus/core";
 import { MapSchema, Schema, type } from "@colyseus/schema";
 import {
-  BASE_MOVEMENT_SPEED_PX_PER_SEC,
   DEFAULT_WORLD_ZONE_ID,
   MAX_PLAYERS_PER_ZONE,
   SERVER_TICK_INTERVAL_MS,
@@ -13,7 +12,7 @@ import {
   MoveInputSchema,
   type MoveInput,
 } from "@pawlands/protocol";
-import { calculateSurvivalModifiers } from "@pawlands/shared";
+import { movementSpeed, stepMovement } from "@pawlands/shared";
 import { DrizzleAuthRepository } from "../auth/authRepository.js";
 import { getZoneTerrain } from "./zoneTerrain.js";
 import { resolveJwtSecret, verifyAuthToken } from "../auth/jwt.js";
@@ -29,6 +28,7 @@ export class PlayerState extends Schema {
   @type("number") energy = 120;
   @type("number") maxEnergy = 120;
   @type("number") satiety = 100;
+  @type("number") lastMoveSeq = -1;
 }
 
 export class ZoneState extends Schema {
@@ -40,11 +40,7 @@ interface ZoneAuth {
   username?: string;
 }
 
-interface PendingInput {
-  dx: number;
-  dy: number;
-  sprint: boolean;
-  seq: number;
+interface PendingInput extends MoveInput {
   expiresAt: number;
 }
 
@@ -122,16 +118,13 @@ export class ZoneRoom extends Room {
   }
 
   private handleMoveInput(sessionId: string, input: MoveInput): void {
-    const previous = this.pendingInputs.get(sessionId);
-    if (previous && input.seq <= previous.seq) return;
-    const magnitude = Math.hypot(input.dx, input.dy);
-    const dx = magnitude > 1 ? input.dx / magnitude : input.dx;
-    const dy = magnitude > 1 ? input.dy / magnitude : input.dy;
-    this.pendingInputs.set(sessionId, { dx, dy, sprint: input.sprint, seq: input.seq, expiresAt: Date.now() + 250 });
+    const player = this.state.players.get(sessionId);
+    if (!player || input.seq <= (this.pendingInputs.get(sessionId)?.seq ?? player.lastMoveSeq)) return;
+    this.pendingInputs.set(sessionId, { ...input, expiresAt: Date.now() + 250 });
   }
 
   private stepSimulation(deltaMs: number): void {
-    const dt = Math.min(deltaMs, SERVER_TICK_INTERVAL_MS) / 1000;
+    const dt = Math.min(deltaMs, SERVER_TICK_INTERVAL_MS);
     const now = Date.now();
     this.state.players.forEach((player, sessionId) => {
       const input = this.pendingInputs.get(sessionId);
@@ -141,20 +134,13 @@ export class ZoneRoom extends Room {
         player.archetype === "tomcat" || player.archetype === "kitten"
           ? player.archetype
           : "cat";
-      const archetypeSpeed = ARCHETYPES[archetypeKey].stats.speedMultiplier;
-      const survival = calculateSurvivalModifiers(player.satiety);
-      const sprintBonus = input.sprint && player.energy > 0 ? 1.25 : 1.0;
-
-      const speed =
-        BASE_MOVEMENT_SPEED_PX_PER_SEC *
-        archetypeSpeed *
-        survival.moveSpeedMultiplier *
-        sprintBonus;
-
-      const x = player.x + input.dx * speed * dt;
-      const y = player.y + input.dy * speed * dt;
-      if (this.terrain.canOccupy(x, player.y)) player.x = x;
-      if (this.terrain.canOccupy(player.x, y)) player.y = y;
+      const speed = movementSpeed(
+        ARCHETYPES[archetypeKey].stats.speedMultiplier, player.satiety, player.energy, input.sprint,
+      );
+      const next = stepMovement(player, input, speed, dt, this.terrain.canOccupy);
+      player.x = next.x;
+      player.y = next.y;
+      player.lastMoveSeq = input.seq;
     });
   }
 }

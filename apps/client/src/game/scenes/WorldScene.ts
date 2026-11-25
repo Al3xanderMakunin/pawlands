@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { BASE_MOVEMENT_SPEED_PX_PER_SEC } from "@pawlands/config";
 import { ARCHETYPES } from "@pawlands/game-data";
-import { calculateEncumbrance, calculateSurvivalModifiers } from "@pawlands/shared";
+import { calculateEncumbrance, calculateSurvivalModifiers, createPlayerCollision, movementSpeed } from "@pawlands/shared";
 import { useGameStore } from "../../stores/useGameStore";
 import { ClientMessage } from "@pawlands/protocol";
 import { joinWorldZone, type WorldPlayer } from "../../network/colyseusClient";
@@ -9,6 +9,7 @@ import { useAuthStore } from "../../stores/useAuthStore";
 import i18n from "../../i18n";
 import { PlayerEntity } from "../entities/PlayerEntity";
 import { KeyboardInput } from "../input/KeyboardInput";
+import { MovementPrediction } from "../input/MovementPrediction";
 import { MouseInput } from "../input/MouseInput";
 import { buildMinimapTerrain, type MinimapMarker } from "../minimap/minimapData";
 import type { TouchControlsScene } from "./TouchControlsScene";
@@ -16,8 +17,7 @@ import type { TouchControlsScene } from "./TouchControlsScene";
 export class WorldScene extends Phaser.Scene {
   private room: Awaited<ReturnType<typeof joinWorldZone>> | null = null;
   private remotePlayers = new Map<string, PlayerEntity>();
-  private lastInputAt = -Infinity;
-  private seq = 0;
+  private prediction!: MovementPrediction;
   private player!: PlayerEntity;
   private keyboardInput!: KeyboardInput;
   private mouseInput!: MouseInput;
@@ -44,6 +44,15 @@ export class WorldScene extends Phaser.Scene {
     map.createLayer("ground", tileset, 0, 0);
     map.createLayer("decor", tileset, 0, 0);
     const obstaclesLayer = map.createLayer("obstacles", tileset, 0, 0);
+
+    const obstacleData = map.getLayer("obstacles")?.data;
+    this.prediction = new MovementPrediction(createPlayerCollision({
+      width: map.width,
+      height: map.height,
+      tileWidth: map.tileWidth,
+      tileHeight: map.tileHeight,
+      isBlocked: (column, row) => (obstacleData?.[row]?.[column]?.index ?? 0) > 0,
+    }));
 
     this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
 
@@ -99,8 +108,6 @@ export class WorldScene extends Phaser.Scene {
 
     let active = true;
     if (store.online && !store.isArchetypeModalOpen) {
-      this.lastInputAt = -Infinity;
-      this.seq = 0;
       store.setConnectionStatus("connecting");
       const onDisconnected = () => {
         if (!active) return;
@@ -126,7 +133,9 @@ export class WorldScene extends Phaser.Scene {
         }
         this.room = room;
         room.onDrop(() => {
-          if (active) store.setConnectionStatus("connecting");
+          if (!active) return;
+          this.prediction.reset();
+          store.setConnectionStatus("connecting");
         });
         room.onReconnect(() => {
           if (active) store.setConnectionStatus("connected");
@@ -236,15 +245,29 @@ export class WorldScene extends Phaser.Scene {
       this.player.updateMovement(0, 0, 0, false);
       return;
     }
-    if (room.connection.isOpen && time - this.lastInputAt >= 50) {
-      this.lastInputAt = time;
-      room.send(ClientMessage.MOVE, { dx, dy, sprint, seq: this.seq++ });
-    }
-
     const players = room.state?.players;
     if (!players) return;
+    const local = players.get(room.sessionId);
+    if (local) {
+      this.player.setArchetype(local.archetype);
+      if (room.connection.isOpen) {
+        const position = this.prediction.update(
+          local, { dx, dy, sprint }, delta,
+          (wantsSprint) => movementSpeed(
+            ARCHETYPES[local.archetype].stats.speedMultiplier, local.satiety, local.energy, wantsSprint,
+          ),
+          (input) => room.send(ClientMessage.MOVE, input),
+        );
+        this.player.updateMovement(dx, dy, 0, sprint && local.energy > 0);
+        this.player.sprite.setPosition(position.x, position.y);
+      } else {
+        this.player.updateMovement(0, 0, 0, false);
+        this.player.sprite.setPosition(local.x, local.y);
+      }
+    }
     players.forEach((state, id) => {
-      let entity = id === room.sessionId ? this.player : this.remotePlayers.get(id);
+      if (id === room.sessionId) return;
+      let entity = this.remotePlayers.get(id);
       if (!entity) {
         entity = new PlayerEntity(this, state.x, state.y, state.archetype);
         this.remotePlayers.set(id, entity);

@@ -41,7 +41,7 @@ All client-to-server messages are parsed with **Zod** schemas before affecting s
 
 - **Synchronized `ZoneState`**:
   - `zoneId`: current zone identifier
-  - `players`: `MapSchema<PlayerState>` (`id`, `name`, `archetype`, `x`, `y`, `hp`, `maxHp`, `energy`, `maxEnergy`, `satiety`)
+  - `players`: `MapSchema<PlayerState>` (`id`, `name`, `archetype`, `x`, `y`, `hp`, `maxHp`, `energy`, `maxEnergy`, `satiety`, `lastMoveSeq`)
 - **Targeted Event Messages**:
   - `combat:hit`: visual hit confirmation, damage number, crit flag
   - `system:notice`: server notices (safe zone entered, overloaded, insufficient energy)
@@ -50,7 +50,8 @@ All client-to-server messages are parsed with **Zod** schemas before affecting s
 ## 4. Prediction, Interpolation, and Reconnection
 
 - **Online movement**: Clients send input at up to 20 Hz. The server discards stale sequences, expires input after 250 ms of silence, and validates each movement step against the bounds and obstacles of the same Tiled map used by Phaser.
-- **Rendering**: The client smooths both local and remote sprites toward the latest server coordinates. Client prediction and reconciliation are planned.
+- **Local player**: Phaser predicts movement immediately using the same speed and collision rules as the server. Each player snapshot carries `lastMoveSeq`, the latest sequence applied by the simulation. The client discards acknowledged input, replays up to five remaining inputs from the authoritative position, and clears pending prediction on network drops.
+- **Remote players**: Phaser smooths their sprites toward the latest server coordinates.
 - **Reconnection**: Colyseus `allowReconnection` holds the player seat and position for 15 seconds on an unexpected drop. Movement stops during the drop. When the SDK exhausts reconnection, the client returns to the world selection dialog.
 
 ## 5. Rate Limiting & Anti-Cheat

@@ -12,6 +12,9 @@ export interface WorldPlayer {
   archetype: CharacterArchetype;
   x: number;
   y: number;
+  energy: number;
+  satiety: number;
+  lastMoveSeq: number;
 }
 
 interface WorldState {

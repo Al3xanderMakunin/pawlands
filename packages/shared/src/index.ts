@@ -1,2 +1,3 @@
 export * from "./types.js";
 export * from "./survival.js";
+export * from "./movement.js";

@@ -10,11 +10,11 @@ Progress target: **6 stages / 30 milestones** leading to a public multiplayer Al
 - [x] Static obstacle and tilemap collision handling
 - [x] Responsive mobile touch controls (virtual joystick + action buttons)
 
-## Stage 2: Multiplayer Foundation (3 / 5)
+## Stage 2: Multiplayer Foundation (4 / 5)
 
 - [x] Account registration, login, and JWT/session authentication
 - [x] Connecting clients to authoritative Colyseus `ZoneRoom` instances
-- [ ] Real-time movement synchronization, prediction, and interpolation (server snapshots and visual smoothing implemented)
+- [x] Real-time movement synchronization, prediction, and interpolation
 - [x] Graceful reconnection on mobile/desktop network drops
 - [ ] Periodic persistence of character stats and last known zone position
 

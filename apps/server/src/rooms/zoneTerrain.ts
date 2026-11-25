@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
-import type { ZoneId } from "@pawlands/shared";
+import { createPlayerCollision, type ZoneId } from "@pawlands/shared";
 
 const tiledMapSchema = z.object({
   width: z.number().int().positive(),
@@ -27,20 +27,13 @@ function loadTerrain(zoneId: ZoneId) {
     throw new Error(`Invalid collision map for ${zoneId}`);
   }
 
-  function canOccupy(x: number, y: number): boolean {
-    // The 32px sprite uses the same 16x12 foot hitbox as Phaser.
-    const left = Math.floor((x - 8) / map.tilewidth);
-    const right = Math.ceil((x + 8) / map.tilewidth) - 1;
-    const top = Math.floor((y + 2) / map.tileheight);
-    const bottom = Math.ceil((y + 14) / map.tileheight) - 1;
-    if (left < 0 || right >= map.width || top < 0 || bottom >= map.height) return false;
-    for (let row = top; row <= bottom; row++) {
-      for (let col = left; col <= right; col++) {
-        if (obstacles[row * map.width + col] !== 0) return false;
-      }
-    }
-    return true;
-  }
+  const canOccupy = createPlayerCollision({
+    width: map.width,
+    height: map.height,
+    tileWidth: map.tilewidth,
+    tileHeight: map.tileheight,
+    isBlocked: (column, row) => obstacles[row * map.width + column] !== 0,
+  });
 
   if (!canOccupy(spawn.x, spawn.y)) throw new Error(`Blocked spawn for ${zoneId}`);
   return { spawn, canOccupy };
