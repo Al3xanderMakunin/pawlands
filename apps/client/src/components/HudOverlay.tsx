@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { ARCHETYPES, WORLD_ZONES } from "@pawlands/game-data";
 import { calculateEncumbrance, calculateSurvivalModifiers } from "@pawlands/shared";
+import { useAuthStore } from "../stores/useAuthStore";
 import { useGameStore, type ConnectionStatus, type TouchControlsMode } from "../stores/useGameStore";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 
@@ -28,6 +29,7 @@ export function HudOverlay() {
     setArchetypeModalOpen,
     setTouchControlsMode,
   } = useGameStore();
+  const { user, openAuthModal, logout } = useAuthStore();
 
   const currentZone = WORLD_ZONES.find((z) => z.id === currentZoneId) ?? WORLD_ZONES[0];
   const archetype = ARCHETYPES[selectedArchetype];
@@ -116,8 +118,28 @@ export function HudOverlay() {
       </div>
 
       {/* Quick Actions */}
-      <div className="pointer-events-auto flex items-center gap-2">
+      <div className="pointer-events-auto flex flex-wrap items-center gap-2">
         <LanguageSwitcher />
+        {user ? (
+          <div className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-slate-900/85 px-2.5 py-1 text-xs text-emerald-200 backdrop-blur">
+            <span className="font-semibold">@{user.username}</span>
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300 hover:border-slate-500"
+            >
+              {t("auth.signOut")}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => openAuthModal("login")}
+            className="rounded-lg border border-slate-700/80 bg-slate-900/85 px-2.5 py-1.5 text-xs font-medium text-slate-200 backdrop-blur hover:border-amber-400 hover:text-amber-200"
+          >
+            {t("auth.signIn")}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setTouchControlsMode(NEXT_TOUCH_MODE[touchControlsMode])}

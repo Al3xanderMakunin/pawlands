@@ -1,4 +1,4 @@
-import { Room, type Client } from "@colyseus/core";
+import { Room, ServerError, type Client } from "@colyseus/core";
 import { MapSchema, Schema, type } from "@colyseus/schema";
 import {
   BASE_MOVEMENT_SPEED_PX_PER_SEC,
@@ -14,6 +14,7 @@ import {
   type MoveInput,
 } from "@pawlands/protocol";
 import { calculateSurvivalModifiers, clamp } from "@pawlands/shared";
+import { resolveJwtSecret, verifyAuthToken, type AuthTokenPayload } from "../auth/jwt.js";
 
 export class PlayerState extends Schema {
   @type("string") id = "";
@@ -60,7 +61,21 @@ export class ZoneRoom extends Room {
     }, SERVER_TICK_INTERVAL_MS);
   }
 
-  override onJoin(client: Client, options: unknown): void {
+  override onAuth(_client: Client, options: unknown): AuthTokenPayload | null {
+    const parsed = JoinZoneOptionsSchema.safeParse(options ?? {});
+    if (!parsed.success || !parsed.data.token) {
+      return null;
+    }
+
+    const payload = verifyAuthToken(parsed.data.token, resolveJwtSecret());
+    if (!payload) {
+      throw new ServerError(401, "Invalid or expired session token");
+    }
+
+    return payload;
+  }
+
+  override onJoin(client: Client, options: unknown, auth?: AuthTokenPayload | null): void {
     const parsed = JoinZoneOptionsSchema.safeParse(options ?? {});
     const joinData = parsed.success
       ? parsed.data
@@ -71,7 +86,7 @@ export class ZoneRoom extends Room {
 
     const player = new PlayerState();
     player.id = client.sessionId;
-    player.name = joinData.name;
+    player.name = auth?.username ?? joinData.name;
     player.archetype = archetypeDef.id;
     player.x = zoneDef?.spawnX ?? 400;
     player.y = zoneDef?.spawnY ?? 300;

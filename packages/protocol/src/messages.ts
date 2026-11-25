@@ -44,6 +44,7 @@ export const JoinZoneOptionsSchema = z.object({
   zoneId: ZoneIdSchema.default("oakpaw_village"),
   name: z.string().trim().min(2).max(24).default("Whisker"),
   archetype: CharacterArchetypeSchema.default("cat"),
+  token: z.string().min(1).optional(),
 });
 
 export type MoveInput = z.infer<typeof MoveInputSchema>;

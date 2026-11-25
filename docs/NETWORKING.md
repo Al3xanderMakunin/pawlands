@@ -9,9 +9,13 @@ Pawlands uses **Colyseus** over **WebSocket** for real-time gameplay and **Fasti
 
 ## 2. Authentication & Session Handshake
 
-1. Client authenticates via Fastify REST endpoints (`/api/v1/auth/...`) and receives a signed session token.
-2. Client requests to join a `ZoneRoom` (`roomName = "zone"`) with `{ zoneId, characterId, token }` validated by `JoinZoneOptionsSchema`.
-3. `ZoneRoom.onAuth` verifies the session token and loads character stats/inventory summary from PostgreSQL/Redis before spawning the player entity in `ZoneState`.
+1. Client authenticates via Fastify REST endpoints and receives a signed HS256 JWT session token:
+   - `POST /api/v1/auth/register` (`RegisterRequestSchema`: `{ email, username, password }`) -> `201 { token, user }`
+   - `POST /api/v1/auth/login` (`LoginRequestSchema`: `{ identifier, password }`) -> `200 { token, user }`
+   - `GET /api/v1/auth/me` (`Authorization: Bearer <token>`) -> `200 { user }`
+   - `POST /api/v1/auth/logout` -> `200 { ok: true }`
+2. Client requests to join a `ZoneRoom` (`roomName = "zone"`) with `{ zoneId, name, archetype, token }` validated by `JoinZoneOptionsSchema`.
+3. `ZoneRoom.onAuth` verifies the optional session token and attaches the authenticated user claims before spawning the player entity in `ZoneState`.
 
 ## 3. Protocol Contracts (`@pawlands/protocol`)
 

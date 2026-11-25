@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { ARCHETYPE_LIST } from "@pawlands/game-data";
+import { useAuthStore } from "../stores/useAuthStore";
 import { useGameStore } from "../stores/useGameStore";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 
@@ -13,6 +14,7 @@ export function ArchetypeSelectModal() {
     enterWorld,
     setArchetypeModalOpen,
   } = useGameStore();
+  const { user, openAuthModal, logout } = useAuthStore();
 
   if (!isArchetypeModalOpen) return null;
 
@@ -41,6 +43,35 @@ export function ArchetypeSelectModal() {
               </button>
             )}
           </div>
+        </div>
+
+        <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-950/60 px-3.5 py-2 text-xs">
+          {user ? (
+            <>
+              <span className="text-slate-300">
+                {t("auth.signedInAs")}{" "}
+                <strong className="font-semibold text-amber-300">@{user.username}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:border-slate-500"
+              >
+                {t("auth.signOut")}
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="text-slate-400">{t("auth.guestNotice")}</span>
+              <button
+                type="button"
+                onClick={() => openAuthModal("login")}
+                className="font-semibold text-amber-400 transition hover:text-amber-300"
+              >
+                {t("auth.openAuthLink")}
+              </button>
+            </>
+          )}
         </div>
 
         <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-2.5 overflow-y-auto overscroll-contain pr-0.5 sm:mt-4 sm:grid-cols-3 sm:gap-3 sm:pr-0">
