@@ -1,0 +1,37 @@
+{
+  "name": "@pawlands/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@colyseus/core": "^0.18.29",
+    "@colyseus/schema": "^5.0.51",
+    "@colyseus/ws-transport": "^0.18.5",
+    "@fastify/cors": "^11.4.3",
+    "@pawlands/config": "workspace:*",
+    "@pawlands/game-data": "workspace:*",
+    "@pawlands/protocol": "workspace:*",
+    "@pawlands/shared": "workspace:*",
+    "drizzle-orm": "^0.45.4",
+    "fastify": "^5.12.8",
+    "ioredis": "^6.1.0",
+    "pg": "^8.23.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  }
+}

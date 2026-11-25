@@ -1,0 +1,12 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: false
+
+minimumReleaseAgeExclude:
+  - "@colyseus/schema@5.0.51"
+  - "@types/react@19.3.2"
+  - i18next@27.2.9

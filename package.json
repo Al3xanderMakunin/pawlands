@@ -1,0 +1,21 @@
+{
+  "name": "pawlands",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open-source multiplayer 2D pixel-art survival RPG featuring cats, an open world, real-time PvP, quests, crafting, and exploration.",
+  "license": "AGPL-3.0-only",
+  "packageManager": "pnpm@12.3.4",
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "dev:client": "pnpm --filter @pawlands/client dev",
+    "dev:server": "pnpm --filter @pawlands/server dev",
+    "build": "pnpm --filter './packages/*' build && pnpm --filter './apps/*' build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "clean": "pnpm -r clean"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.1"
+  }
+}

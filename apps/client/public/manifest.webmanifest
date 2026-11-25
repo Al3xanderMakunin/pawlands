@@ -1,0 +1,11 @@
+{
+  "name": "Pawlands",
+  "short_name": "Pawlands",
+  "description": "Open-source multiplayer 2D pixel-art survival RPG featuring cats.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#020617",
+  "theme_color": "#131722",
+  "icons": []
+}

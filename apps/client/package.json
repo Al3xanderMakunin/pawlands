@@ -1,0 +1,35 @@
+{
+  "name": "@pawlands/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@colyseus/sdk": "^0.18.10",
+    "@pawlands/config": "workspace:*",
+    "@pawlands/game-data": "workspace:*",
+    "@pawlands/protocol": "workspace:*",
+    "@pawlands/shared": "workspace:*",
+    "i18next": "^27.2.9",
+    "phaser": "^4.2.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-i18next": "^18.0.3",
+    "zustand": "^5.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.5",
+    "@types/react": "^19.3.2",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "tailwindcss": "^4.3.5",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.8"
+  }
+}

@@ -1,0 +1,74 @@
+import {
+  boolean,
+  integer,
+  pgTable,
+  real,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
+
+export const users = pgTable("users", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  email: text("email").notNull().unique(),
+  username: text("username").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const characters = pgTable("characters", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull().unique(),
+  archetype: text("archetype").notNull(),
+  level: integer("level").default(1).notNull(),
+  xp: integer("xp").default(0).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const characterStats = pgTable("character_stats", {
+  characterId: uuid("character_id")
+    .primaryKey()
+    .references(() => characters.id, { onDelete: "cascade" }),
+  hp: integer("hp").notNull(),
+  maxHp: integer("max_hp").notNull(),
+  energy: integer("energy").notNull(),
+  maxEnergy: integer("max_energy").notNull(),
+  satiety: integer("satiety").default(100).notNull(),
+  strength: integer("strength").notNull(),
+  agility: integer("agility").notNull(),
+  speedMultiplier: real("speed_multiplier").default(1).notNull(),
+  maxCarryWeightKg: real("max_carry_weight_kg").notNull(),
+});
+
+export const worldZones = pgTable("world_zones", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  isPvpEnabled: boolean("is_pvp_enabled").default(false).notNull(),
+  spawnX: real("spawn_x").default(0).notNull(),
+  spawnY: real("spawn_y").default(0).notNull(),
+});
+
+export const characterPositions = pgTable("character_positions", {
+  characterId: uuid("character_id")
+    .primaryKey()
+    .references(() => characters.id, { onDelete: "cascade" }),
+  zoneId: text("zone_id")
+    .notNull()
+    .references(() => worldZones.id),
+  x: real("x").notNull(),
+  y: real("y").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const wallets = pgTable("wallets", {
+  characterId: uuid("character_id")
+    .primaryKey()
+    .references(() => characters.id, { onDelete: "cascade" }),
+  coins: integer("coins").default(0).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
