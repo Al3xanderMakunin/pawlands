@@ -64,6 +64,7 @@ export class WorldScene extends Phaser.Scene {
     this.mouseInput = new MouseInput(this, {
       bounds: { width: map.widthInPixels, height: map.heightInPixels },
       canAcceptClick: () => !useGameStore.getState().isArchetypeModalOpen,
+      canAcceptTap: (x, y) => !this.getTouchScene()?.blocksTerrainTap(x, y),
     });
 
     if (!this.scene.isActive("TouchControlsScene")) {
@@ -108,8 +109,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     const kb = this.keyboardInput.sample();
-    const touchScene = this.scene.get("TouchControlsScene") as TouchControlsScene | undefined;
-    const touch = touchScene?.sample() ?? {
+    const touch = this.getTouchScene()?.sample() ?? {
       moveX: 0,
       moveY: 0,
       sprint: false,
@@ -160,6 +160,10 @@ export class WorldScene extends Phaser.Scene {
       this.player.playActionPulse("interact");
       this.flashActionLabel(i18n.t("actions.interact"));
     }
+  }
+
+  private getTouchScene(): TouchControlsScene | undefined {
+    return this.scene.get("TouchControlsScene") as TouchControlsScene | undefined;
   }
 
   private resolveSpawnPoint(map: Phaser.Tilemaps.Tilemap): { x: number; y: number } {

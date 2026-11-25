@@ -107,17 +107,20 @@ export class ClickMoveTracker {
 export interface MouseInputOptions {
   bounds?: WorldBounds;
   canAcceptClick?: () => boolean;
+  canAcceptTap?: (x: number, y: number) => boolean;
 }
 
 /**
- * Handles desktop mouse click (and click-drag) navigation in world coordinates,
+ * Handles mouse click, click-drag and touch navigation in world coordinates,
  * rendering a subtle destination marker on the ground.
  */
 export class MouseInput {
   private readonly scene: Phaser.Scene;
   private readonly tracker: ClickMoveTracker;
   private readonly canAcceptClick: () => boolean;
+  private readonly canAcceptTap: (x: number, y: number) => boolean;
   private readonly marker: Phaser.GameObjects.Arc;
+  private readonly pendingTaps = new Set<number>();
   private isDragging = false;
   private activePointerId: number | null = null;
   private pulseElapsedMs = 0;
@@ -126,6 +129,7 @@ export class MouseInput {
     this.scene = scene;
     this.tracker = new ClickMoveTracker({ bounds: options.bounds });
     this.canAcceptClick = options.canAcceptClick ?? (() => true);
+    this.canAcceptTap = options.canAcceptTap ?? (() => true);
 
     this.marker = scene.add
       .circle(0, 0, 6, 0xfbbf24, 0.22)
@@ -136,7 +140,7 @@ export class MouseInput {
     scene.input.on("pointerdown", this.onPointerDown, this);
     scene.input.on("pointermove", this.onPointerMove, this);
     scene.input.on("pointerup", this.onPointerUp, this);
-    scene.input.on("pointerupoutside", this.onPointerUp, this);
+    scene.input.on("pointerupoutside", this.onPointerUpOutside, this);
   }
 
   public sample(currentX: number, currentY: number, deltaMs: number): ClickMoveSample {
@@ -154,6 +158,7 @@ export class MouseInput {
   }
 
   public clear(): void {
+    this.pendingTaps.clear();
     this.tracker.clear();
     this.isDragging = false;
     this.activePointerId = null;
@@ -164,18 +169,24 @@ export class MouseInput {
     this.scene.input.off("pointerdown", this.onPointerDown, this);
     this.scene.input.off("pointermove", this.onPointerMove, this);
     this.scene.input.off("pointerup", this.onPointerUp, this);
-    this.scene.input.off("pointerupoutside", this.onPointerUp, this);
+    this.scene.input.off("pointerupoutside", this.onPointerUpOutside, this);
     this.marker.destroy();
     this.tracker.clear();
   }
 
   private readonly onPointerDown = (pointer: Phaser.Input.Pointer): void => {
-    if (pointer.wasTouch || pointer.button !== 0) return;
+    if (!pointer.wasTouch && pointer.button !== 0) return;
     if (!this.canAcceptClick()) return;
 
     const eventTarget = pointer.event?.target;
     const canvas = this.scene.game.canvas;
     if (canvas && eventTarget && eventTarget !== canvas) return;
+
+    if (pointer.wasTouch) {
+      this.pendingTaps.delete(pointer.id);
+      if (this.canAcceptTap(pointer.x, pointer.y)) this.pendingTaps.add(pointer.id);
+      return;
+    }
 
     this.isDragging = true;
     this.activePointerId = pointer.id;
@@ -183,12 +194,36 @@ export class MouseInput {
   };
 
   private readonly onPointerMove = (pointer: Phaser.Input.Pointer): void => {
+    if (pointer.wasTouch) {
+      if (this.hasMovedBeyondTapSlop(pointer)) this.pendingTaps.delete(pointer.id);
+      return;
+    }
     if (!this.isDragging || pointer.id !== this.activePointerId || !pointer.isDown) return;
-    if (pointer.wasTouch || !this.canAcceptClick()) return;
+    if (!this.canAcceptClick()) return;
     this.setWorldTarget(pointer.worldX, pointer.worldY);
   };
 
   private readonly onPointerUp = (pointer: Phaser.Input.Pointer): void => {
+    if (
+      this.pendingTaps.delete(pointer.id) &&
+      pointer.wasTouch &&
+      !pointer.wasCanceled &&
+      !this.hasMovedBeyondTapSlop(pointer) &&
+      this.canAcceptClick() &&
+      this.canAcceptTap(pointer.x, pointer.y)
+    ) {
+      const { x, y } = this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      this.setWorldTarget(x, y);
+    }
+    this.onPointerUpOutside(pointer);
+  };
+
+  private hasMovedBeyondTapSlop(pointer: Phaser.Input.Pointer): boolean {
+    return Math.hypot(pointer.x - pointer.downX, pointer.y - pointer.downY) > 10;
+  }
+
+  private readonly onPointerUpOutside = (pointer: Phaser.Input.Pointer): void => {
+    this.pendingTaps.delete(pointer.id);
     if (pointer.id === this.activePointerId) {
       this.isDragging = false;
       this.activePointerId = null;

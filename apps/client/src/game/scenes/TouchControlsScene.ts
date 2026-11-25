@@ -45,6 +45,10 @@ export class TouchControlsScene extends Phaser.Scene {
     });
   }
 
+  public blocksTerrainTap(x: number, y: number): boolean {
+    return this.touchControls?.blocksTerrainTap(x, y) ?? false;
+  }
+
   public sample(): MovementInputState {
     return this.touchControls?.sample() ?? EMPTY_TOUCH_STATE;
   }

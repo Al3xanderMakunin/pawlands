@@ -113,6 +113,16 @@ export class TouchControls {
     this.sprintLabel.setPosition(pos.sprintX, pos.sprintY);
   }
 
+  public blocksTerrainTap(x: number, y: number): boolean {
+    return this.visible && (
+      this.stickPointerId !== null ||
+      this.hitCircle(x, y, this.baseCircle, this.maxRadius) ||
+      this.hitCircle(x, y, this.attackBtn, 36) ||
+      this.hitCircle(x, y, this.interactBtn, 30) ||
+      this.hitCircle(x, y, this.sprintBtn, 28)
+    );
+  }
+
   public sample(): MovementInputState {
     const attackJustPressed = this.attackQueued;
     const interactJustPressed = this.interactQueued;
@@ -170,8 +180,7 @@ export class TouchControls {
       return;
     }
 
-    // Left half of screen activates virtual joystick
-    if (this.stickPointerId === null && x < this.scene.scale.width * 0.5) {
+    if (this.stickPointerId === null && this.hitCircle(x, y, this.baseCircle, this.maxRadius)) {
       this.stickPointerId = pointer.id;
       this.updateStick(x, y);
     }
