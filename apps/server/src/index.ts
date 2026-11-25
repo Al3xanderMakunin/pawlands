@@ -6,12 +6,17 @@ import {
   ZONE_ROOM_NAME,
 } from "@pawlands/config";
 import { createApp } from "./app.js";
+import { runMigrations } from "./database/migrate.js";
 import { ZoneRoom } from "./rooms/ZoneRoom.js";
 
 const port = Number(process.env.PORT ?? DEFAULT_SERVER_PORT);
 const host = process.env.HOST ?? DEFAULT_SERVER_HOST;
 
 async function bootstrap(): Promise<void> {
+  if (process.env.AUTO_MIGRATE !== "false") {
+    await runMigrations();
+  }
+
   const fastify = await createApp();
 
   const gameServer = new Server({

@@ -49,6 +49,7 @@ COPY --from=builder --chown=node:node /app/packages/game-data/dist ./packages/ga
 COPY --from=builder --chown=node:node /app/packages/protocol/dist ./packages/protocol/dist
 COPY --from=builder --chown=node:node /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder --chown=node:node /app/apps/server/dist ./apps/server/dist
+COPY --from=builder --chown=node:node /app/apps/server/drizzle ./apps/server/drizzle
 
 USER node
 EXPOSE 2567

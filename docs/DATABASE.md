@@ -43,3 +43,5 @@ Schema changes are managed via `drizzle-kit`:
 pnpm --filter @pawlands/server db:generate
 pnpm --filter @pawlands/server db:migrate
 ```
+
+On server startup/restart (`apps/server/src/index.ts`), `runMigrations()` automatically applies any pending SQL migrations from `apps/server/drizzle` under a PostgreSQL advisory lock before the HTTP/WebSocket server begins listening. Set `AUTO_MIGRATE=false` to disable automatic migrations on startup.
