@@ -41,7 +41,9 @@ export const resources = {
       language: "Language",
       chooseArchetype: "Choose your feline",
       archetypeSubtitle: "Each archetype has distinct survival stats, carry capacity, and speed.",
-      enterWorld: "Enter Oakpaw Village",
+      worldSelection: "World Selection",
+      worldSelectionSubtitle: "Choose a starting map to begin your adventure.",
+      enterWorld: "Enter {{zone}}",
       applyChanges: "Apply & Resume",
       close: "Close",
       speed: "Speed",
@@ -78,6 +80,15 @@ export const resources = {
         clawpeak_ridge: "Clawpeak Ridge",
         sunken_crypt: "Sunken Crypt",
         bloodclaw_wilds: "Bloodclaw Wilds",
+      },
+      zoneDescriptions: {
+        oakpaw_village: "Safe feline settlement with quest givers, merchants, and crafting stations.",
+        whispering_woods:
+          "Sunlit forest rich with herbs, small prey, and introductory hunting quests.",
+        clawpeak_ridge:
+          "Rocky highland trails with ore veins, mountain predators, and skirmishes.",
+        sunken_crypt: "Ancient underground ruin housing elite enemies and rare gear.",
+        bloodclaw_wilds: "Contested open PvP frontier with high-tier loot and clan territory.",
       },
       survivalStatus: {
         well_fed: "well_fed",
@@ -143,7 +154,9 @@ export const resources = {
       chooseArchetype: "Выберите своего кота",
       archetypeSubtitle:
         "У каждого архетипа свои показатели выживания, грузоподъёмность и скорость.",
-      enterWorld: "Войти в Деревню Дубовой Лапы",
+      worldSelection: "Выбор мира",
+      worldSelectionSubtitle: "Выберите стартовую карту для начала игры.",
+      enterWorld: "Войти: {{zone}}",
       applyChanges: "Применить и продолжить",
       close: "Закрыть",
       speed: "Скорость",
@@ -180,6 +193,13 @@ export const resources = {
         clawpeak_ridge: "Хребет Когтистого Пика",
         sunken_crypt: "Затонувший Склеп",
         bloodclaw_wilds: "Дикие Земли Кровавого Когтя",
+      },
+      zoneDescriptions: {
+        oakpaw_village: "Безопасное кошачье поселение с квестами, торговцами и верстаками.",
+        whispering_woods: "Солнечный лес с травами, мелкой дичью и первыми заданиями на охоту.",
+        clawpeak_ridge: "Каменистые горные тропы с жилами руды, хищниками и стычками.",
+        sunken_crypt: "Древние подземные руины с элитными врагами и редким снаряжением.",
+        bloodclaw_wilds: "Спорные PvP-земли с ценной добычей и территориями кланов.",
       },
       survivalStatus: {
         well_fed: "сыт",

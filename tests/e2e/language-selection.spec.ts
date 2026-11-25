@@ -11,12 +11,13 @@ test.describe("Language Selection", () => {
 
     await expect(ruButton).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByText("Выберите своего кота")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Выбор мира" })).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Войти в Деревню Дубовой Лапы" })
+      page.getByRole("button", { name: "Войти: Деревня Дубовой Лапы" })
     ).toBeVisible();
 
     // Enter world and verify HUD is localized in Russian
-    await page.getByRole("button", { name: "Войти в Деревню Дубовой Лапы" }).click();
+    await page.getByRole("button", { name: "Войти: Деревня Дубовой Лапы" }).click();
 
     const header = page.locator("header");
     await expect(header).toContainText("Деревня Дубовой Лапы");

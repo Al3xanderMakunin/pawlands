@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { WORLD_ZONES } from "@pawlands/game-data";
 import type { CharacterArchetype } from "@pawlands/shared";
 
 const ARCHETYPE_KEYS: CharacterArchetype[] = ["tomcat", "cat", "kitten"];
@@ -13,7 +14,9 @@ export class BootScene extends Phaser.Scene {
 
   preload(): void {
     this.load.image("pawlands_tileset", "/assets/tilesets/pawlands_tileset.png");
-    this.load.tilemapTiledJSON("oakpaw_village", "/assets/maps/oakpaw_village.tmj");
+    for (const zone of WORLD_ZONES) {
+      this.load.tilemapTiledJSON(zone.id, `/assets/maps/${zone.id}.tmj`);
+    }
 
     for (const key of ARCHETYPE_KEYS) {
       this.load.spritesheet(key, `/assets/sprites/${key}.png`, {

@@ -22,7 +22,8 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create(): void {
-    const map = this.make.tilemap({ key: "oakpaw_village" });
+    const store = useGameStore.getState();
+    const map = this.make.tilemap({ key: store.currentZoneId });
     const tileset = map.addTilesetImage("pawlands_tileset", "pawlands_tileset");
 
     if (!tileset) {
@@ -36,7 +37,6 @@ export class WorldScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
 
     const spawnPoint = this.resolveSpawnPoint(map);
-    const store = useGameStore.getState();
 
     this.player = new PlayerEntity(this, spawnPoint.x, spawnPoint.y, store.selectedArchetype);
 
@@ -66,6 +66,10 @@ export class WorldScene extends Phaser.Scene {
     this.scale.on("resize", this.handleResize, this);
 
     this.unsubscribeStore = useGameStore.subscribe((state, prevState) => {
+      if (state.currentZoneId !== prevState.currentZoneId) {
+        this.scene.restart();
+        return;
+      }
       if (state.selectedArchetype !== prevState.selectedArchetype) {
         this.player.setArchetype(state.selectedArchetype);
       }
@@ -83,6 +87,8 @@ export class WorldScene extends Phaser.Scene {
       this.scale.off("resize", this.handleResize, this);
       this.unsubscribeStore?.();
       this.unsubscribeStore = null;
+      this.actionClearTimer?.remove(false);
+      this.actionClearTimer = null;
       this.keyboardInput.destroy();
       this.mouseInput.destroy();
       this.touchControls.destroy();

@@ -15,6 +15,7 @@ interface GameStoreState {
   lastActionLabel: string | null;
   survival: SurvivalState;
   setArchetype: (archetype: CharacterArchetype) => void;
+  setZoneId: (zoneId: ZoneId) => void;
   enterWorld: () => void;
   setArchetypeModalOpen: (open: boolean) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
@@ -50,6 +51,7 @@ export const useGameStore = create<GameStoreState>((set) => ({
       selectedArchetype: archetype,
       survival: createInitialSurvival(archetype),
     }),
+  setZoneId: (currentZoneId) => set({ currentZoneId }),
   enterWorld: () =>
     set({
       hasEnteredWorld: true,
