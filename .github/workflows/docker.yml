@@ -58,8 +58,10 @@ jobs:
         include:
           - app: server
             dockerfile: apps/server/Dockerfile
+            deploy_webhook: https://dokploy.makunin.com/api/deploy/Nu1P1y2h10UXFAROxw6py
           - app: client
             dockerfile: apps/client/Dockerfile
+            deploy_webhook: https://dokploy.makunin.com/api/deploy/OhTF8yVmsFlb28lw7TMAk
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -102,3 +104,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.app }}
           cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+      - name: Trigger Dokploy deploy
+        run: curl --fail --silent --show-error -X POST "${{ matrix.deploy_webhook }}"
