@@ -9,12 +9,15 @@ import {
   type TelegramAuthRequest,
 } from "@pawlands/protocol";
 import { useAdminStore } from "./useAdminStore";
+import { ApplePopupError, signInWithApplePopup } from "../network/appleAuth";
 import {
   AuthApiError,
   authenticateWithTelegram,
+  fetchAuthProviders,
   fetchCurrentUser,
   getGoogleAuthUrl,
   loginAccount,
+  loginWithAppleAccount,
   logoutAccount,
   registerAccount,
 } from "../network/authClient";
@@ -22,7 +25,11 @@ import {
 export const AUTH_TOKEN_STORAGE_KEY = "pawlands.auth_token";
 
 export type AuthModalMode = "login" | "register";
-export type AuthUiErrorCode = AuthErrorCode | "NETWORK_ERROR" | "PASSWORDS_MISMATCH";
+export type AuthUiErrorCode =
+  | AuthErrorCode
+  | "NETWORK_ERROR"
+  | "PASSWORDS_MISMATCH"
+  | "APPLE_POPUP_CANCELLED";
 
 function readStoredToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -63,6 +70,7 @@ interface AuthStoreState {
   register: (payload: RegisterRequest) => Promise<boolean>;
   startGoogleAuth: () => void;
   loginWithTelegram: (payload: TelegramAuthRequest) => Promise<boolean>;
+  loginWithApple: () => Promise<boolean>;
   logout: () => Promise<void>;
   restoreSession: () => Promise<void>;
   handleOAuthCallbackFromUrl: () => Promise<void>;
@@ -133,6 +141,41 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     if (typeof window === "undefined") return;
     set({ isSubmitting: true, errorCode: null });
     window.location.assign(getGoogleAuthUrl());
+  },
+
+  loginWithApple: async () => {
+    set({ isSubmitting: true, errorCode: null });
+    try {
+      let appleClientId = (import.meta.env.VITE_APPLE_CLIENT_ID as string | undefined)?.trim() || null;
+      if (!appleClientId) {
+        const providers = await fetchAuthProviders();
+        appleClientId = providers.apple.enabled ? providers.apple.clientId : null;
+      }
+
+      if (!appleClientId) {
+        set({ isSubmitting: false, errorCode: "APPLE_NOT_CONFIGURED" });
+        return false;
+      }
+
+      const applePayload = await signInWithApplePopup(appleClientId);
+      const response = await loginWithAppleAccount(applePayload);
+      writeStoredToken(response.token);
+      set({
+        user: response.user,
+        token: response.token,
+        isSubmitting: false,
+        isAuthModalOpen: false,
+        errorCode: null,
+      });
+      return true;
+    } catch (err) {
+      const code: AuthUiErrorCode =
+        err instanceof ApplePopupError || err instanceof AuthApiError
+          ? err.code
+          : "APPLE_AUTH_FAILED";
+      set({ isSubmitting: false, errorCode: code });
+      return false;
+    }
   },
 
   logout: async () => {

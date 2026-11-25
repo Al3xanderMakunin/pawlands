@@ -1,6 +1,13 @@
-import { createHash, createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, createSign, generateKeyPairSync, randomUUID } from "node:crypto";
+import { createServer } from "node:http";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../app.js";
+import {
+  AppleTokenVerificationError,
+  JwksAppleTokenVerifier,
+  type AppleTokenClaims,
+  type AppleTokenVerifier,
+} from "./apple.js";
 import type { AuthRepository, CreateUserInput, UserRecord } from "./authRepository.js";
 import type { GoogleOAuthClient, GoogleOAuthConfig, GoogleUserProfile } from "./googleOAuth.js";
 import { signAuthToken, verifyAuthToken } from "./jwt.js";
@@ -41,6 +48,20 @@ class InMemoryAuthRepository implements AuthRepository {
     return this.users.find((u) => u.yandexId === yandexId) ?? null;
   }
 
+  async findByAppleSub(appleSub: string): Promise<UserRecord | null> {
+    return this.users.find((u) => u.appleSub === appleSub) ?? null;
+  }
+
+  async linkAppleSub(userId: string, appleSub: string): Promise<UserRecord> {
+    const user = this.users.find((u) => u.id === userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    user.appleSub = appleSub;
+    user.updatedAt = new Date();
+    return user;
+  }
+
   async createUser(input: CreateUserInput): Promise<UserRecord> {
     const now = new Date();
     const record: UserRecord = {
@@ -55,6 +76,7 @@ class InMemoryAuthRepository implements AuthRepository {
       yandexId: input.yandexId ?? null,
       telegramId: input.telegramId ?? null,
       telegramUsername: input.telegramUsername ?? null,
+      appleSub: input.appleSub ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -296,6 +318,145 @@ describe("auth HTTP routes", () => {
       });
       expect(res.statusCode).toBe(503);
       expect(res.json().error).toBe("GOOGLE_AUTH_NOT_CONFIGURED");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("authenticates new and existing users via Apple Sign-In", async () => {
+    const fakeTokens: Record<string, AppleTokenClaims> = {
+      "apple-new-user": {
+        sub: "apple-sub-001",
+        email: "NewCat@Privaterelay.Appleid.com",
+        emailVerified: true,
+      },
+      "apple-existing-email": {
+        sub: "apple-sub-002",
+        email: "whisker@pawlands.gg",
+        emailVerified: true,
+      },
+    };
+
+    const verifier: AppleTokenVerifier = {
+      async verifyIdToken(idToken: string): Promise<AppleTokenClaims> {
+        const claims = fakeTokens[idToken];
+        if (!claims) {
+          throw new AppleTokenVerificationError("Invalid Apple token");
+        }
+        return claims;
+      },
+    };
+
+    const repo = new InMemoryAuthRepository();
+    const app = await createApp({
+      authRepository: repo,
+      appleVerifier: verifier,
+      appleClientId: "gg.pawlands.web",
+      jwtSecret: "test-route-secret",
+      logger: false,
+    });
+
+    try {
+      const providersRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/providers",
+      });
+      expect(providersRes.statusCode).toBe(200);
+      expect(providersRes.json()).toEqual({
+        apple: { enabled: true, clientId: "gg.pawlands.web" },
+      });
+
+      // Register a regular user first
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: {
+          email: "whisker@pawlands.gg",
+          username: "Whisker_01",
+          password: "password123",
+        },
+      });
+
+      // New Apple user registration
+      const appleNewRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/apple",
+        payload: {
+          idToken: "apple-new-user",
+          fullName: { firstName: "Mittens", lastName: "Cat" },
+        },
+      });
+      expect(appleNewRes.statusCode).toBe(200);
+      const appleNewData = appleNewRes.json();
+      expect(appleNewData.user.email).toBe("newcat@privaterelay.appleid.com");
+      expect(appleNewData.user.username).toBe("Mittens_Cat");
+
+      // Subsequent login with the same Apple account
+      const appleRepeatRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/apple",
+        payload: {
+          idToken: "apple-new-user",
+        },
+      });
+      expect(appleRepeatRes.statusCode).toBe(200);
+      expect(appleRepeatRes.json().user.id).toBe(appleNewData.user.id);
+
+      // Password login on Apple-only account fails cleanly
+      const passwordLoginRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: {
+          identifier: "Mittens_Cat",
+          password: "any-password",
+        },
+      });
+      expect(passwordLoginRes.statusCode).toBe(401);
+      expect(passwordLoginRes.json().error).toBe("INVALID_CREDENTIALS");
+
+      // Apple login links to existing email account
+      const linkedRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/apple",
+        payload: {
+          idToken: "apple-existing-email",
+        },
+      });
+      expect(linkedRes.statusCode).toBe(200);
+      expect(linkedRes.json().user.username).toBe("Whisker_01");
+
+      // Invalid Apple token returns 401
+      const invalidRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/apple",
+        payload: {
+          idToken: "bad-token",
+        },
+      });
+      expect(invalidRes.statusCode).toBe(401);
+      expect(invalidRes.json().error).toBe("APPLE_AUTH_FAILED");
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("returns 503 when Apple Sign-In is not configured", async () => {
+    const app = await createApp({
+      authRepository: new InMemoryAuthRepository(),
+      appleVerifier: null,
+      appleClientId: null,
+      jwtSecret: "test-route-secret",
+      logger: false,
+    });
+
+    try {
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/apple",
+        payload: { idToken: "anything" },
+      });
+      expect(res.statusCode).toBe(503);
+      expect(res.json().error).toBe("APPLE_NOT_CONFIGURED");
     } finally {
       await app.close();
     }
@@ -760,6 +921,86 @@ describe("telegram authentication", () => {
       expect(res.json().error).toBe("TELEGRAM_NOT_CONFIGURED");
     } finally {
       await app.close();
+    }
+  });
+});
+
+describe("JwksAppleTokenVerifier", () => {
+  it("verifies RS256 Apple ID tokens against JWKS and rejects invalid claims", async () => {
+    const { publicKey, privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const jwk = publicKey.export({ format: "jwk" });
+    const kid = "test-apple-key-1";
+
+    const jwksServer = createServer((_req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ keys: [{ ...jwk, kid, alg: "RS256", use: "sig" }] }));
+    });
+
+    await new Promise<void>((resolve) => jwksServer.listen(0, "127.0.0.1", resolve));
+    const address = jwksServer.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Unexpected JWKS server address");
+    }
+    const jwksUrl = `http://127.0.0.1:${address.port}/keys`;
+
+    const signAppleJwt = (payload: Record<string, unknown>) => {
+      const header = Buffer.from(JSON.stringify({ alg: "RS256", kid, typ: "JWT" })).toString(
+        "base64url"
+      );
+      const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+      const signer = createSign("RSA-SHA256");
+      signer.update(`${header}.${body}`);
+      signer.end();
+      const sig = signer.sign(privateKey).toString("base64url");
+      return `${header}.${body}.${sig}`;
+    };
+
+    try {
+      const verifier = new JwksAppleTokenVerifier(["gg.pawlands.web"], jwksUrl);
+      const now = Math.floor(Date.now() / 1000);
+
+      const validToken = signAppleJwt({
+        iss: "https://appleid.apple.com",
+        aud: "gg.pawlands.web",
+        exp: now + 300,
+        sub: "001234.abcdef.0001",
+        email: "AppleCat@Example.com",
+        email_verified: "true",
+        nonce: "nonce-123",
+      });
+
+      const claims = await verifier.verifyIdToken(validToken, "nonce-123");
+      expect(claims).toEqual({
+        sub: "001234.abcdef.0001",
+        email: "applecat@example.com",
+        emailVerified: true,
+      });
+
+      await expect(verifier.verifyIdToken(validToken, "wrong-nonce")).rejects.toThrow(
+        AppleTokenVerificationError
+      );
+
+      const wrongAudToken = signAppleJwt({
+        iss: "https://appleid.apple.com",
+        aud: "com.other.app",
+        exp: now + 300,
+        sub: "001234.abcdef.0001",
+      });
+      await expect(verifier.verifyIdToken(wrongAudToken)).rejects.toThrow(
+        AppleTokenVerificationError
+      );
+
+      const expiredToken = signAppleJwt({
+        iss: "https://appleid.apple.com",
+        aud: "gg.pawlands.web",
+        exp: now - 10,
+        sub: "001234.abcdef.0001",
+      });
+      await expect(verifier.verifyIdToken(expiredToken)).rejects.toThrow(
+        AppleTokenVerificationError
+      );
+    } finally {
+      await new Promise<void>((resolve) => jwksServer.close(() => resolve()));
     }
   });
 });

@@ -5,6 +5,11 @@ import { DrizzleAdminRepository, type AdminRepository } from "./admin/adminRepos
 import { AdminService } from "./admin/adminService.js";
 import { registerAdminRoutes } from "./api/adminRoutes.js";
 import { registerAuthRoutes } from "./api/authRoutes.js";
+import {
+  JwksAppleTokenVerifier,
+  resolveAppleClientIds,
+  type AppleTokenVerifier,
+} from "./auth/apple.js";
 import { DrizzleAuthRepository, type AuthRepository } from "./auth/authRepository.js";
 import { AuthService } from "./auth/authService.js";
 import {
@@ -26,6 +31,8 @@ export interface CreateAppOptions {
   authRepository?: AuthRepository;
   adminRepository?: AdminRepository;
   yandexOAuth?: YandexOAuthProvider;
+  appleVerifier?: AppleTokenVerifier | null;
+  appleClientId?: string | null;
   jwtSecret?: string;
   telegramBotToken?: string;
   corsOrigin?: string | boolean;
@@ -57,7 +64,23 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   const adminRepository = options.adminRepository ?? new DrizzleAdminRepository();
   const jwtSecret = options.jwtSecret ?? resolveJwtSecret();
   const telegramBotToken = options.telegramBotToken ?? resolveTelegramBotToken();
-  const authService = new AuthService(authRepository, jwtSecret, telegramBotToken);
+  const configuredAppleIds = resolveAppleClientIds();
+  const appleClientId =
+    options.appleClientId !== undefined
+      ? options.appleClientId
+      : (configuredAppleIds[0] ?? null);
+  const appleVerifier =
+    options.appleVerifier !== undefined
+      ? options.appleVerifier
+      : configuredAppleIds.length > 0
+        ? new JwksAppleTokenVerifier(configuredAppleIds)
+        : null;
+  const authService = new AuthService(
+    authRepository,
+    jwtSecret,
+    telegramBotToken,
+    appleVerifier
+  );
   const googleOAuthConfig =
     options.googleOAuthConfig === undefined
       ? resolveGoogleOAuthConfig()
@@ -74,6 +97,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     googleOAuthConfig,
     googleOAuthClient,
     yandexOAuth,
+    appleClientId,
   });
   await registerAdminRoutes(fastify, authService, adminService);
 

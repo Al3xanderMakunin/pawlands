@@ -20,6 +20,7 @@ export const users = pgTable("users", {
   yandexId: text("yandex_id").unique(),
   telegramId: text("telegram_id").unique(),
   telegramUsername: text("telegram_username"),
+  appleSub: text("apple_sub").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

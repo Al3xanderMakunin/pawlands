@@ -50,6 +50,18 @@ class InMemoryStore implements AuthRepository, AdminRepository {
     return this.users.find((u) => u.id === id) ?? null;
   }
 
+  async findByAppleSub(appleSub: string): Promise<UserRecord | null> {
+    return this.users.find((u) => u.appleSub === appleSub) ?? null;
+  }
+
+  async linkAppleSub(userId: string, appleSub: string): Promise<UserRecord> {
+    const user = this.users.find((u) => u.id === userId);
+    if (!user) throw new Error("User not found");
+    user.appleSub = appleSub;
+    user.updatedAt = new Date();
+    return user;
+  }
+
   async createUser(input: CreateUserInput): Promise<UserRecord> {
     const now = new Date();
     const record: UserRecord = {
@@ -64,6 +76,7 @@ class InMemoryStore implements AuthRepository, AdminRepository {
       banReason: null,
       telegramId: input.telegramId ?? null,
       telegramUsername: input.telegramUsername ?? null,
+      appleSub: input.appleSub ?? null,
       createdAt: now,
       updatedAt: now,
     };

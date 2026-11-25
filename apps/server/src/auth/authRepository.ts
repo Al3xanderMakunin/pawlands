@@ -15,6 +15,7 @@ export interface UserRecord {
   yandexId: string | null;
   telegramId: string | null;
   telegramUsername: string | null;
+  appleSub: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -28,6 +29,7 @@ export interface CreateUserInput {
   yandexId?: string | null;
   telegramId?: string | null;
   telegramUsername?: string | null;
+  appleSub?: string | null;
 }
 
 function normalizeRole(role: string): UserRole {
@@ -50,6 +52,7 @@ function toUserRecord(row: typeof users.$inferSelect): UserRecord {
     banReason: row.banReason ?? null,
     telegramId: row.telegramId ?? null,
     telegramUsername: row.telegramUsername ?? null,
+    appleSub: row.appleSub,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -62,6 +65,8 @@ export interface AuthRepository {
   findByTelegramId(telegramId: string): Promise<UserRecord | null>;
   findById(id: string): Promise<UserRecord | null>;
   findByYandexId(yandexId: string): Promise<UserRecord | null>;
+  findByAppleSub(appleSub: string): Promise<UserRecord | null>;
+  linkAppleSub(userId: string, appleSub: string): Promise<UserRecord>;
   createUser(input: CreateUserInput): Promise<UserRecord>;
   linkGoogleAccount(userId: string, googleId: string): Promise<UserRecord>;
   linkYandexAccount(userId: string, yandexId: string): Promise<UserRecord>;
@@ -120,6 +125,25 @@ export class DrizzleAuthRepository implements AuthRepository {
     return row ? toUserRecord(row) : null;
   }
 
+  async findByAppleSub(appleSub: string): Promise<UserRecord | null> {
+    const [row] = await db.select().from(users).where(eq(users.appleSub, appleSub)).limit(1);
+    return row ? toUserRecord(row) : null;
+  }
+
+  async linkAppleSub(userId: string, appleSub: string): Promise<UserRecord> {
+    const [updated] = await db
+      .update(users)
+      .set({ appleSub, updatedAt: new Date() })
+      .where(eq(users.id, userId))
+      .returning();
+
+    if (!updated) {
+      throw new Error("Failed to link Apple account");
+    }
+
+    return toUserRecord(updated);
+  }
+
   async createUser(input: CreateUserInput): Promise<UserRecord> {
     const [created] = await db
       .insert(users)
@@ -132,6 +156,7 @@ export class DrizzleAuthRepository implements AuthRepository {
         yandexId: input.yandexId ?? null,
         telegramId: input.telegramId ?? null,
         telegramUsername: input.telegramUsername ?? null,
+        appleSub: input.appleSub ?? null,
       })
       .returning();
 

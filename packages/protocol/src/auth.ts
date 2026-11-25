@@ -30,6 +30,17 @@ export const TelegramAuthRequestSchema = z.object({
   hash: z.string().trim().regex(/^[0-9a-f]{64}$/i, "Invalid Telegram hash format"),
 });
 
+export const AppleAuthRequestSchema = z.object({
+  idToken: z.string().min(1),
+  nonce: z.string().min(1).max(255).optional(),
+  fullName: z
+    .object({
+      firstName: z.string().trim().max(100).optional(),
+      lastName: z.string().trim().max(100).optional(),
+    })
+    .optional(),
+});
+
 export const AuthUserSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email().nullable(),
@@ -49,6 +60,13 @@ export const AuthMeResponseSchema = z.object({
   user: AuthUserSchema,
 });
 
+export const AuthProvidersResponseSchema = z.object({
+  apple: z.object({
+    enabled: z.boolean(),
+    clientId: z.string().nullable(),
+  }),
+});
+
 export const AuthErrorCodeSchema = z.enum([
   "VALIDATION_ERROR",
   "EMAIL_TAKEN",
@@ -64,6 +82,8 @@ export const AuthErrorCodeSchema = z.enum([
   "YANDEX_INVALID_STATE",
   "YANDEX_ACCESS_DENIED",
   "YANDEX_AUTH_FAILED",
+  "APPLE_AUTH_FAILED",
+  "APPLE_NOT_CONFIGURED",
   "INTERNAL_ERROR",
 ]);
 
@@ -71,7 +91,9 @@ export type UserRole = z.infer<typeof UserRoleSchema>;
 export type RegisterRequest = z.infer<typeof RegisterRequestSchema>;
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 export type TelegramAuthRequest = z.infer<typeof TelegramAuthRequestSchema>;
+export type AppleAuthRequest = z.infer<typeof AppleAuthRequestSchema>;
 export type AuthUser = z.infer<typeof AuthUserSchema>;
 export type AuthResponse = z.infer<typeof AuthResponseSchema>;
 export type AuthMeResponse = z.infer<typeof AuthMeResponseSchema>;
+export type AuthProvidersResponse = z.infer<typeof AuthProvidersResponseSchema>;
 export type AuthErrorCode = z.infer<typeof AuthErrorCodeSchema>;

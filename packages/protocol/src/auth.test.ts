@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  AppleAuthRequestSchema,
   LoginRequestSchema,
   RegisterRequestSchema,
   TelegramAuthRequestSchema,
@@ -70,6 +71,22 @@ describe("auth protocol schemas", () => {
         first_name: "Whisker",
         auth_date: 1700000000,
         hash: "short-hash",
+      }).success
+    ).toBe(false);
+  });
+
+  it("validates Apple authentication payload", () => {
+    expect(
+      AppleAuthRequestSchema.safeParse({
+        idToken: "header.payload.signature",
+        nonce: "random-nonce",
+        fullName: { firstName: "Whisker", lastName: "Paws" },
+      }).success
+    ).toBe(true);
+
+    expect(
+      AppleAuthRequestSchema.safeParse({
+        idToken: "",
       }).success
     ).toBe(false);
   });

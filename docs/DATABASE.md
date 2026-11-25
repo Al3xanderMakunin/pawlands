@@ -12,7 +12,7 @@ Pawlands uses **PostgreSQL** with **Drizzle ORM** (`apps/server/src/database/sch
 
 ## 2. Core Entities (17 Tables)
 
-1. **`users`**: Player accounts (`id`, `email`, `username`, `passwordHash` nullable, `googleId` nullable unique, `yandexId` nullable unique, `role`, `isBanned`, `banReason`, `createdAt`, `updatedAt`).
+1. **`users`**: Player accounts (`id`, `email`, `username`, `passwordHash` nullable, `googleId` nullable unique, `yandexId` nullable unique, `appleSub` nullable unique, `role`, `isBanned`, `banReason`, `createdAt`, `updatedAt`).
 2. **`characters`**: Playable feline characters owned by a user (`id`, `userId`, `name`, `archetype`, `level`, `xp`, `createdAt`).
 3. **`character_stats`**: Durable baseline and current vitals (`characterId`, `hp`, `maxHp`, `energy`, `maxEnergy`, `satiety`, `strength`, `agility`, `baseSpeed`, `maxCarryWeightKg`).
 4. **`items`**: Static/catalog item definitions mirrored or seeded from game data (`id`, `slug`, `name`, `category`, `weightKg`, `maxStack`, `metadata`).

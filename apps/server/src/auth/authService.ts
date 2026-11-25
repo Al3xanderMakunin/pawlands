@@ -1,5 +1,6 @@
 import { randomBytes, randomInt } from "node:crypto";
 import type {
+  AppleAuthRequest,
   AuthErrorCode,
   AuthResponse,
   AuthUser,
@@ -8,6 +9,7 @@ import type {
   TelegramAuthRequest,
   UserRole,
 } from "@pawlands/protocol";
+import { AppleTokenVerificationError, type AppleTokenVerifier } from "./apple.js";
 import type { AuthRepository, UserRecord } from "./authRepository.js";
 import type { GoogleUserProfile } from "./googleOAuth.js";
 import { signAuthToken, verifyAuthToken } from "./jwt.js";
@@ -85,11 +87,27 @@ function isPgUniqueViolation(err: unknown): { constraint?: string } | null {
   return null;
 }
 
+function buildUsernameBase(
+  email: string,
+  fullName?: AppleAuthRequest["fullName"]
+): string {
+  const nameCandidate = [fullName?.firstName, fullName?.lastName]
+    .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+    .join("_");
+  const rawBase = nameCandidate || email.split("@")[0] || "cat";
+  const sanitized = rawBase.replace(/[^a-zA-Z0-9_-]/g, "_").replace(/_+/g, "_").replace(/^[_-]+|[_-]+$/g, "");
+  if (sanitized.length >= 3) {
+    return sanitized.slice(0, 24);
+  }
+  return `${sanitized || "cat"}_paw`.slice(0, 24);
+}
+
 export class AuthService {
   constructor(
     private readonly repository: AuthRepository,
     private readonly jwtSecret: string,
-    private readonly telegramBotToken?: string
+    private readonly telegramBotToken?: string,
+    private readonly appleVerifier: AppleTokenVerifier | null = null
   ) {}
 
   private async resolveUniqueTelegramUsername(input: TelegramAuthRequest): Promise<string> {
@@ -108,6 +126,50 @@ export class AuthService {
     }
 
     return `tg_${String(input.id).slice(-12)}_${Date.now().toString(36).slice(-4)}`.slice(0, 24);
+  }
+
+  private buildAuthResponse(user: UserRecord): AuthResponse {
+    if (user.isBanned) {
+      throw new AuthError(
+        "ACCOUNT_BANNED",
+        user.banReason ? `Account is banned: ${user.banReason}` : "Account is banned",
+        403
+      );
+    }
+
+    const token = signAuthToken(
+      {
+        sub: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+      },
+      this.jwtSecret
+    );
+
+    return {
+      token,
+      user: toAuthUser(user),
+    };
+  }
+
+  private async generateUniqueUsername(base: string): Promise<string> {
+    const existingBase = await this.repository.findByUsername(base);
+    if (!existingBase) {
+      return base;
+    }
+
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const suffix = `_${randomInt(1000, 9999)}`;
+      const candidate = `${base.slice(0, 24 - suffix.length)}${suffix}`;
+      const existing = await this.repository.findByUsername(candidate);
+      if (!existing) {
+        return candidate;
+      }
+    }
+
+    const fallbackSuffix = `_${randomInt(100000, 999999)}`;
+    return `${base.slice(0, 24 - fallbackSuffix.length)}${fallbackSuffix}`;
   }
 
   async register(input: RegisterRequest): Promise<AuthResponse> {
@@ -162,14 +224,6 @@ export class AuthService {
     const isPasswordValid = await verifyPassword(input.password, user.passwordHash);
     if (!isPasswordValid) {
       throw new AuthError("INVALID_CREDENTIALS", "Invalid email/username or password", 401);
-    }
-
-    if (user.isBanned) {
-      throw new AuthError(
-        "ACCOUNT_BANNED",
-        user.banReason ? `Account is banned: ${user.banReason}` : "Account is banned",
-        403
-      );
     }
 
     return this.buildAuthResponse(user);
@@ -269,21 +323,73 @@ export class AuthService {
     return `${base.slice(0, 24 - fallbackSuffix.length)}${fallbackSuffix}`;
   }
 
-  private buildAuthResponse(user: UserRecord): AuthResponse {
-    const token = signAuthToken(
-      {
-        sub: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-      },
-      this.jwtSecret
-    );
+  async authenticateWithApple(input: AppleAuthRequest): Promise<AuthResponse> {
+    if (!this.appleVerifier) {
+      throw new AuthError("APPLE_NOT_CONFIGURED", "Apple Sign-In is not configured", 503);
+    }
 
-    return {
-      token,
-      user: toAuthUser(user),
-    };
+    let claims;
+    try {
+      claims = await this.appleVerifier.verifyIdToken(input.idToken, input.nonce);
+    } catch (err) {
+      const message =
+        err instanceof AppleTokenVerificationError
+          ? err.message
+          : "Invalid Apple identity token";
+      throw new AuthError("APPLE_AUTH_FAILED", message, 401);
+    }
+
+    let user = await this.repository.findByAppleSub(claims.sub);
+
+    if (!user && claims.email && claims.emailVerified) {
+      const existingByEmail = await this.repository.findByEmail(claims.email);
+      if (existingByEmail) {
+        user = await this.repository.linkAppleSub(existingByEmail.id, claims.sub);
+      }
+    }
+
+    if (!user) {
+      if (!claims.email) {
+        throw new AuthError(
+          "APPLE_AUTH_FAILED",
+          "Apple Sign-In did not provide an email address",
+          400
+        );
+      }
+
+      const usernameBase = buildUsernameBase(claims.email, input.fullName);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const username = await this.generateUniqueUsername(usernameBase);
+        try {
+          user = await this.repository.createUser({
+            email: claims.email,
+            username,
+            passwordHash: null,
+            appleSub: claims.sub,
+          });
+          break;
+        } catch (err) {
+          const uniqueErr = isPgUniqueViolation(err);
+          if (uniqueErr?.constraint?.includes("username") && attempt < 2) {
+            continue;
+          }
+          if (uniqueErr) {
+            const byApple = await this.repository.findByAppleSub(claims.sub);
+            if (byApple) {
+              user = byApple;
+              break;
+            }
+          }
+          throw err;
+        }
+      }
+
+      if (!user) {
+        throw new AuthError("INTERNAL_ERROR", "Unable to create Apple user account", 500);
+      }
+    }
+
+    return this.buildAuthResponse(user);
   }
 
   async authenticateWithTelegram(input: TelegramAuthRequest): Promise<AuthResponse> {
@@ -361,7 +467,9 @@ export class AuthService {
         }
         user = await this.repository.linkGoogleAccount(existingByEmail.id, profile.sub);
       } else {
-        const username = await this.generateUniqueUsername(profile);
+        const username = await this.generateUniqueUsername(
+          buildUsernameBase(email, profile.name ? { firstName: profile.name } : undefined)
+        );
         try {
           user = await this.repository.createUser({
             email,
@@ -392,28 +500,6 @@ export class AuthService {
       token,
       user: toAuthUser(user),
     };
-  }
-
-  private async generateUniqueUsername(profile: GoogleUserProfile): Promise<string> {
-    const rawSource = profile.name?.trim() || profile.email.split("@")[0] || "paw_cat";
-    const sanitized = rawSource
-      .replace(/[^a-zA-Z0-9_-]+/g, "_")
-      .replace(/^[_-]+|[_-]+$/g, "");
-    const base = sanitized.length >= 3 ? sanitized.slice(0, 24) : "paw_cat";
-
-    if (!(await this.repository.findByUsername(base))) {
-      return base;
-    }
-
-    const prefix = base.slice(0, 19);
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const candidate = `${prefix}_${randomBytes(2).toString("hex")}`;
-      if (!(await this.repository.findByUsername(candidate))) {
-        return candidate;
-      }
-    }
-
-    return `cat_${randomBytes(4).toString("hex")}`;
   }
 
   async getCurrentUser(token: string): Promise<AuthUser> {

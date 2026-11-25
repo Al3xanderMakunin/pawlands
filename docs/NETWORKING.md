@@ -10,9 +10,11 @@ Pawlands uses **Colyseus** over **WebSocket** for real-time gameplay and **Fasti
 ## 2. Authentication & Session Handshake
 
 1. Client authenticates via Fastify REST endpoints and receives a signed HS256 JWT session token:
+   - `GET /api/v1/auth/providers` -> `200 { apple: { enabled, clientId } }`
    - `POST /api/v1/auth/register` (`RegisterRequestSchema`: `{ email, username, password }`) -> `201 { token, user }`
    - `POST /api/v1/auth/login` (`LoginRequestSchema`: `{ identifier, password }`) -> `200 { token, user }`
    - `POST /api/v1/auth/telegram` (`TelegramAuthRequestSchema`: Telegram Login Widget payload `{ id, first_name, last_name?, username?, photo_url?, auth_date, hash }`) -> `200 { token, user }` (creates an account on first login or signs in an existing Telegram-linked account)
+   - `POST /api/v1/auth/apple` (`AppleAuthRequestSchema`: `{ idToken, nonce?, fullName? }`) -> `200 { token, user }`
    - `GET /api/v1/auth/me` (`Authorization: Bearer <token>`) -> `200 { user }`
    - `POST /api/v1/auth/logout` -> `200 { ok: true }`
    - `GET /api/v1/auth/google` -> `302` redirect to Google OAuth 2.0 consent screen (or `503 GOOGLE_AUTH_NOT_CONFIGURED`)

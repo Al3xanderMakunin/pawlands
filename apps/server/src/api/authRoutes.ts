@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
+  AppleAuthRequestSchema,
   LoginRequestSchema,
   RegisterRequestSchema,
   TelegramAuthRequestSchema,
@@ -22,6 +23,7 @@ export interface AuthRoutesOptions {
   googleOAuthConfig: GoogleOAuthConfig | null;
   googleOAuthClient: GoogleOAuthClient;
   yandexOAuth?: YandexOAuthProvider;
+  appleClientId?: string | null;
 }
 
 function resolveClientRedirectUrl(options: AuthRoutesOptions): string {
@@ -55,6 +57,17 @@ export async function registerAuthRoutes(
   authService: AuthService,
   options: AuthRoutesOptions
 ): Promise<void> {
+  const appleClientId = options.appleClientId ?? null;
+
+  fastify.get("/api/v1/auth/providers", async (_request, reply) => {
+    return reply.code(200).send({
+      apple: {
+        enabled: Boolean(appleClientId),
+        clientId: appleClientId,
+      },
+    });
+  });
+
   fastify.post("/api/v1/auth/register", async (request, reply) => {
     const parsed = RegisterRequestSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -103,6 +116,24 @@ export async function registerAuthRoutes(
 
     try {
       const result = await authService.authenticateWithTelegram(parsed.data);
+      return reply.code(200).send(result);
+    } catch (err) {
+      return handleAuthRouteError(err, reply, request);
+    }
+  });
+
+  fastify.post("/api/v1/auth/apple", async (request, reply) => {
+    const parsed = AppleAuthRequestSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: "VALIDATION_ERROR",
+        message: "Invalid Apple authentication payload",
+        details: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    try {
+      const result = await authService.authenticateWithApple(parsed.data);
       return reply.code(200).send(result);
     } catch (err) {
       return handleAuthRouteError(err, reply, request);

@@ -1,7 +1,10 @@
 import {
   AuthMeResponseSchema,
+  AuthProvidersResponseSchema,
   AuthResponseSchema,
+  type AppleAuthRequest,
   type AuthErrorCode,
+  type AuthProvidersResponse,
   type AuthResponse,
   type AuthUser,
   type LoginRequest,
@@ -96,6 +99,31 @@ export async function authenticateWithTelegram(
   payload: TelegramAuthRequest
 ): Promise<AuthResponse> {
   const response = await requestJson("/api/v1/auth/telegram", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw await parseErrorResponse(response);
+  }
+
+  return AuthResponseSchema.parse(await response.json());
+}
+
+export async function fetchAuthProviders(): Promise<AuthProvidersResponse> {
+  const response = await requestJson("/api/v1/auth/providers", {
+    method: "GET",
+  });
+
+  if (!response.ok) {
+    throw await parseErrorResponse(response);
+  }
+
+  return AuthProvidersResponseSchema.parse(await response.json());
+}
+
+export async function loginWithAppleAccount(payload: AppleAuthRequest): Promise<AuthResponse> {
+  const response = await requestJson("/api/v1/auth/apple", {
     method: "POST",
     body: JSON.stringify(payload),
   });
