@@ -8,22 +8,13 @@ import {
   type GoogleOAuthClient,
   type GoogleOAuthConfig,
 } from "../auth/googleOAuth.js";
+import { extractBearerToken } from "./authHelpers.js";
 
 export interface AuthRoutesOptions {
   jwtSecret: string;
   appUrl: string;
   googleOAuthConfig: GoogleOAuthConfig | null;
   googleOAuthClient: GoogleOAuthClient;
-}
-
-function extractBearerToken(request: FastifyRequest): string | null {
-  const authHeader = request.headers.authorization;
-  if (!authHeader) return null;
-  const [scheme, token] = authHeader.split(" ");
-  if (scheme?.toLowerCase() !== "bearer" || !token) {
-    return null;
-  }
-  return token.trim() || null;
 }
 
 function handleAuthRouteError(err: unknown, reply: FastifyReply, request: FastifyRequest) {

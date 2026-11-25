@@ -35,6 +35,9 @@ class InMemoryAuthRepository implements AuthRepository {
       username: input.username.trim(),
       passwordHash: input.passwordHash ?? null,
       googleId: input.googleId ?? null,
+      role: input.role ?? "player",
+      isBanned: false,
+      banReason: null,
       createdAt: now,
       updatedAt: now,
     };

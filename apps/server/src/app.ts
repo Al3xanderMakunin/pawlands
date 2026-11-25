@@ -1,6 +1,9 @@
 import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
 import { WORLD_ZONES } from "@pawlands/game-data";
+import { DrizzleAdminRepository, type AdminRepository } from "./admin/adminRepository.js";
+import { AdminService } from "./admin/adminService.js";
+import { registerAdminRoutes } from "./api/adminRoutes.js";
 import { registerAuthRoutes } from "./api/authRoutes.js";
 import { DrizzleAuthRepository, type AuthRepository } from "./auth/authRepository.js";
 import { AuthService } from "./auth/authService.js";
@@ -15,6 +18,7 @@ import { resolveJwtSecret } from "./auth/jwt.js";
 
 export interface CreateAppOptions {
   authRepository?: AuthRepository;
+  adminRepository?: AdminRepository;
   jwtSecret?: string;
   corsOrigin?: string | boolean;
   appUrl?: string;
@@ -41,6 +45,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
   }));
 
   const authRepository = options.authRepository ?? new DrizzleAuthRepository();
+  const adminRepository = options.adminRepository ?? new DrizzleAdminRepository();
   const jwtSecret = options.jwtSecret ?? resolveJwtSecret();
   const authService = new AuthService(authRepository, jwtSecret);
   const googleOAuthConfig =
@@ -49,6 +54,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
       : options.googleOAuthConfig;
   const googleOAuthClient = options.googleOAuthClient ?? new FetchGoogleOAuthClient();
   const appUrl = resolveAppUrl(options.appUrl);
+  const adminService = new AdminService(adminRepository);
 
   await registerAuthRoutes(fastify, authService, {
     jwtSecret,
@@ -56,6 +62,7 @@ export async function createApp(options: CreateAppOptions = {}): Promise<Fastify
     googleOAuthConfig,
     googleOAuthClient,
   });
+  await registerAdminRoutes(fastify, authService, adminService);
 
   return fastify;
 }

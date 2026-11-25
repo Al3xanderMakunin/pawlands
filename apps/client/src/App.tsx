@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { AdminPanelModal } from "./components/AdminPanelModal";
 import { ArchetypeSelectModal } from "./components/ArchetypeSelectModal";
 import { AuthModal } from "./components/AuthModal";
 import { HudOverlay } from "./components/HudOverlay";
@@ -27,6 +28,7 @@ export function App() {
       <HudOverlay />
       <ArchetypeSelectModal />
       <AuthModal />
+      <AdminPanelModal />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import type {
   AuthUser,
   LoginRequest,
   RegisterRequest,
+  UserRole,
 } from "@pawlands/protocol";
 import type { AuthRepository, UserRecord } from "./authRepository.js";
 import type { GoogleUserProfile } from "./googleOAuth.js";
@@ -28,8 +29,21 @@ function toAuthUser(record: UserRecord): AuthUser {
     id: record.id,
     email: record.email,
     username: record.username,
+    role: record.role,
+    isBanned: record.isBanned,
     createdAt: record.createdAt.toISOString(),
   };
+}
+
+function isBootstrapAdminEmail(email: string): boolean {
+  const configured = process.env.ADMIN_EMAILS;
+  if (!configured) return false;
+  const normalized = email.trim().toLowerCase();
+  return configured
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+    .includes(normalized);
 }
 
 function isPgUniqueViolation(err: unknown): { constraint?: string } | null {
@@ -64,6 +78,7 @@ export class AuthService {
     }
 
     const passwordHash = await hashPassword(input.password);
+    const initialRole: UserRole = isBootstrapAdminEmail(email) ? "admin" : "player";
 
     let created: UserRecord;
     try {
@@ -71,6 +86,7 @@ export class AuthService {
         email,
         username,
         passwordHash,
+        role: initialRole,
       });
     } catch (err) {
       const uniqueErr = isPgUniqueViolation(err);
@@ -88,6 +104,7 @@ export class AuthService {
         sub: created.id,
         username: created.username,
         email: created.email,
+        role: created.role,
       },
       this.jwtSecret
     );
@@ -113,11 +130,20 @@ export class AuthService {
       throw new AuthError("INVALID_CREDENTIALS", "Invalid email/username or password", 401);
     }
 
+    if (user.isBanned) {
+      throw new AuthError(
+        "ACCOUNT_BANNED",
+        user.banReason ? `Account is banned: ${user.banReason}` : "Account is banned",
+        403
+      );
+    }
+
     const token = signAuthToken(
       {
         sub: user.id,
         username: user.username,
         email: user.email,
+        role: user.role,
       },
       this.jwtSecret
     );
@@ -212,6 +238,14 @@ export class AuthService {
     const user = await this.repository.findById(payload.sub);
     if (!user) {
       throw new AuthError("UNAUTHORIZED", "Account no longer exists", 401);
+    }
+
+    if (user.isBanned) {
+      throw new AuthError(
+        "ACCOUNT_BANNED",
+        user.banReason ? `Account is banned: ${user.banReason}` : "Account is banned",
+        403
+      );
     }
 
     return toAuthUser(user);

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { AuthErrorCode, AuthUser, LoginRequest, RegisterRequest } from "@pawlands/protocol";
+import { useAdminStore } from "./useAdminStore";
 import {
   AuthApiError,
   fetchCurrentUser,
@@ -137,6 +138,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
   logout: async () => {
     const token = get().token;
     writeStoredToken(null);
+    useAdminStore.getState().closeAdminPanel();
     set({ user: null, token: null, errorCode: null });
     if (token) {
       await logoutAccount(token);

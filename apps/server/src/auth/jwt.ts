@@ -1,9 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import type { UserRole } from "@pawlands/protocol";
 
 export interface AuthTokenClaims {
   sub: string;
   username: string;
   email: string;
+  role?: UserRole;
 }
 
 export interface AuthTokenPayload extends AuthTokenClaims {

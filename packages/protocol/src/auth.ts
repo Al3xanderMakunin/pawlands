@@ -18,10 +18,14 @@ export const LoginRequestSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
+export const UserRoleSchema = z.enum(["player", "moderator", "admin"]);
+
 export const AuthUserSchema = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
   username: z.string().min(3).max(24),
+  role: UserRoleSchema,
+  isBanned: z.boolean(),
   createdAt: z.string(),
 });
 
@@ -39,12 +43,14 @@ export const AuthErrorCodeSchema = z.enum([
   "EMAIL_TAKEN",
   "USERNAME_TAKEN",
   "INVALID_CREDENTIALS",
+  "ACCOUNT_BANNED",
   "UNAUTHORIZED",
   "GOOGLE_AUTH_NOT_CONFIGURED",
   "GOOGLE_AUTH_FAILED",
   "INTERNAL_ERROR",
 ]);
 
+export type UserRole = z.infer<typeof UserRoleSchema>;
 export type RegisterRequest = z.infer<typeof RegisterRequestSchema>;
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 export type AuthUser = z.infer<typeof AuthUserSchema>;

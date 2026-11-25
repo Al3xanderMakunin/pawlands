@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { ARCHETYPES, WORLD_ZONES } from "@pawlands/game-data";
 import { calculateEncumbrance, calculateSurvivalModifiers } from "@pawlands/shared";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useAdminStore } from "../stores/useAdminStore";
 import { useAuthStore } from "../stores/useAuthStore";
 import { useGameStore, type ConnectionStatus, type TouchControlsMode } from "../stores/useGameStore";
 import { LanguageSwitcher } from "./LanguageSwitcher";
@@ -32,6 +33,7 @@ export function HudOverlay() {
     setTouchControlsMode,
   } = useGameStore();
   const { user, openAuthModal, logout } = useAuthStore();
+  const { openAdminPanel } = useAdminStore();
 
   const currentZone = WORLD_ZONES.find((z) => z.id === currentZoneId) ?? WORLD_ZONES[0];
   const archetype = ARCHETYPES[selectedArchetype];
@@ -125,6 +127,15 @@ export function HudOverlay() {
         {user ? (
           <div className="flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-slate-900/85 px-2.5 py-1 text-xs text-emerald-200 backdrop-blur">
             <span className="font-semibold">@{user.username}</span>
+            {user.role === "admin" && (
+              <button
+                type="button"
+                onClick={openAdminPanel}
+                className="rounded border border-amber-500/60 bg-amber-500/20 px-2 py-0.5 text-[11px] font-semibold text-amber-300 hover:border-amber-400 hover:bg-amber-500/30"
+              >
+                {t("admin.button")}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => void logout()}
