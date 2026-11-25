@@ -12,7 +12,9 @@ interface TelegramLoginButtonProps {
   disabled?: boolean;
 }
 
-const telegramBotUsername = (import.meta.env.VITE_TELEGRAM_BOT_USERNAME ?? "").trim();
+const telegramBotUsername = (import.meta.env.VITE_TELEGRAM_BOT_USERNAME ?? "")
+  .trim()
+  .replace(/^@+/, "");
 
 export function TelegramLoginButton({ onAuth, disabled = false }: TelegramLoginButtonProps) {
   const { t } = useTranslation();
