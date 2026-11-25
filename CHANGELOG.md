@@ -4,6 +4,18 @@ All notable changes to **Pawlands** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0](https://github.com/Al3xanderMakunin/pawlands/compare/v1.1.0...v1.2.0) (2026-11-25)
+
+
+### Features
+
+* **client:** add Russian language selection and localization ([13465f5](https://github.com/Al3xanderMakunin/pawlands/commit/13465f5402fcd38c424221cf70466e3fa5938416))
+
+
+### Bug Fixes
+
+* **client:** use physical key codes for layout-independent input ([f74933c](https://github.com/Al3xanderMakunin/pawlands/commit/f74933c2330a7ad7147fa3069c0ef7f797527fb2))
+
 ## [1.1.0](https://github.com/Al3xanderMakunin/pawlands/compare/v1.0.0...v1.1.0) (2026-11-25)
 
 
