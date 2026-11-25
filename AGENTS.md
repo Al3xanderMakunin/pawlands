@@ -35,3 +35,7 @@ pnpm typecheck
 pnpm build
 pnpm test
 ```
+
+## 4. Git Workflow
+
+- After completing a task and passing all verification checks, commit the changes, rebase onto `main`, and merge (fast-forward) into `main`.
