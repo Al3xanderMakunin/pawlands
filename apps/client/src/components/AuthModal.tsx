@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { LoginRequestSchema, RegisterRequestSchema } from "@pawlands/protocol";
 import { useAuthStore } from "../stores/useAuthStore";
+import { AnimatedModal } from "./AnimatedModal";
 
 export function AuthModal() {
   const { t } = useTranslation();
@@ -23,8 +24,6 @@ export function AuthModal() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
-  if (!isAuthModalOpen) return null;
 
   const isRegister = authModalMode === "register";
 
@@ -81,13 +80,12 @@ export function AuthModal() {
   };
 
   return (
-    <div
-      className="pointer-events-auto absolute inset-0 z-30 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="auth-modal-title"
+    <AnimatedModal
+      isOpen={isAuthModalOpen}
+      ariaLabelledBy="auth-modal-title"
+      backdropClassName="z-30 bg-slate-950/80 p-4"
+      panelClassName="w-full max-w-md rounded-2xl border border-slate-700/90 bg-slate-900/95 p-6 shadow-2xl"
     >
-      <div className="w-full max-w-md rounded-2xl border border-slate-700/90 bg-slate-900/95 p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-amber-400">
@@ -259,7 +257,6 @@ export function AuthModal() {
                 : t("auth.loginSubmit")}
           </button>
         </form>
-      </div>
-    </div>
+    </AnimatedModal>
   );
 }

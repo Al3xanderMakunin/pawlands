@@ -3,6 +3,7 @@ import { ARCHETYPE_LIST, WORLD_ZONES } from "@pawlands/game-data";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useAuthStore } from "../stores/useAuthStore";
 import { useGameStore } from "../stores/useGameStore";
+import { AnimatedModal } from "./AnimatedModal";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 
 export function ArchetypeSelectModal() {
@@ -20,17 +21,22 @@ export function ArchetypeSelectModal() {
   } = useGameStore();
   const { user, openAuthModal, logout } = useAuthStore();
 
-  if (!isArchetypeModalOpen) return null;
-
   return (
-    <div className="pointer-events-auto absolute inset-0 z-20 flex items-center justify-center bg-slate-950/75 pt-[max(0.75rem,env(safe-area-inset-top))] pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] backdrop-blur-sm sm:pt-[max(1rem,env(safe-area-inset-top))] sm:pr-[max(1rem,env(safe-area-inset-right))] sm:pb-[max(1rem,env(safe-area-inset-bottom))] sm:pl-[max(1rem,env(safe-area-inset-left))]">
-      <div className="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-700/90 bg-slate-900/95 p-4 shadow-2xl sm:p-5">
+    <AnimatedModal
+      isOpen={isArchetypeModalOpen}
+      ariaLabelledBy="archetype-modal-title"
+      backdropClassName="z-20 bg-slate-950/75 pt-[max(0.75rem,env(safe-area-inset-top))] pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] sm:pt-[max(1rem,env(safe-area-inset-top))] sm:pr-[max(1rem,env(safe-area-inset-right))] sm:pb-[max(1rem,env(safe-area-inset-bottom))] sm:pl-[max(1rem,env(safe-area-inset-left))]"
+      panelClassName="flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-slate-700/90 bg-slate-900/95 p-4 shadow-2xl sm:p-5"
+    >
         <div className="flex shrink-0 items-start justify-between gap-3 sm:gap-4">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-widest text-amber-400">
               {t("title")}
             </p>
-            <h2 className="mt-0.5 text-lg font-bold text-slate-100 sm:mt-1 sm:text-xl">
+            <h2
+              id="archetype-modal-title"
+              className="mt-0.5 text-lg font-bold text-slate-100 sm:mt-1 sm:text-xl"
+            >
               {t("chooseArchetype")}
             </h2>
             <p className="mt-0.5 text-xs text-slate-400">{t("archetypeSubtitle")}</p>
@@ -196,7 +202,6 @@ export function ArchetypeSelectModal() {
               : t("enterWorld", { zone: t(`zones.${currentZoneId}`) })}
           </button>
         </div>
-      </div>
-    </div>
+    </AnimatedModal>
   );
 }
