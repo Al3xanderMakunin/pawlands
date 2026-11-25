@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { ARCHETYPES, WORLD_ZONES } from "@pawlands/game-data";
 import { calculateEncumbrance, calculateSurvivalModifiers } from "@pawlands/shared";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { useAuthStore } from "../stores/useAuthStore";
 import { useGameStore, type ConnectionStatus, type TouchControlsMode } from "../stores/useGameStore";
 import { LanguageSwitcher } from "./LanguageSwitcher";
@@ -19,6 +20,7 @@ const CONNECTION_STATUS_KEYS: Record<ConnectionStatus, string> = {
 
 export function HudOverlay() {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
   const {
     selectedArchetype,
     currentZoneId,
@@ -140,13 +142,15 @@ export function HudOverlay() {
             {t("auth.signIn")}
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => setTouchControlsMode(NEXT_TOUCH_MODE[touchControlsMode])}
-          className="rounded-lg border border-slate-700/80 bg-slate-900/85 px-2.5 py-1.5 text-xs font-medium text-slate-200 backdrop-blur hover:border-slate-500"
-        >
-          {t("touchPad")}: {t(`touchMode.${touchControlsMode}`)}
-        </button>
+        {isMobile && (
+          <button
+            type="button"
+            onClick={() => setTouchControlsMode(NEXT_TOUCH_MODE[touchControlsMode])}
+            className="rounded-lg border border-slate-700/80 bg-slate-900/85 px-2.5 py-1.5 text-xs font-medium text-slate-200 backdrop-blur hover:border-slate-500"
+          >
+            {t("touchPad")}: {t(`touchMode.${touchControlsMode}`)}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setArchetypeModalOpen(true)}

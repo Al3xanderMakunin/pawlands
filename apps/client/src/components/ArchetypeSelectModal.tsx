@@ -1,11 +1,13 @@
 import { useTranslation } from "react-i18next";
 import { ARCHETYPE_LIST } from "@pawlands/game-data";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { useAuthStore } from "../stores/useAuthStore";
 import { useGameStore } from "../stores/useGameStore";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 
 export function ArchetypeSelectModal() {
   const { t } = useTranslation();
+  const isMobile = useIsMobile();
   const {
     selectedArchetype,
     hasEnteredWorld,
@@ -128,7 +130,9 @@ export function ArchetypeSelectModal() {
         </div>
 
         <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2.5 border-t border-slate-800 pt-3 sm:mt-5 sm:gap-3 sm:pt-4">
-          <p className="text-[11px] text-slate-400">{t("controlsHint")}</p>
+          <p className="text-[11px] text-slate-400">
+            {isMobile ? t("mobileControlsHint") : t("controlsHint")}
+          </p>
           <button
             type="button"
             onClick={enterWorld}

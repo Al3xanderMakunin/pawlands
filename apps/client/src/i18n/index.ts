@@ -53,6 +53,8 @@ export const resources = {
       changeArchetype: "Change Cat",
       controlsHint:
         "Desktop: WASD / Arrows or Click to move, Shift (Sprint), Space (Attack), E (Interact)",
+      mobileControlsHint:
+        "Mobile: Virtual joystick to move, RUN (Sprint), ATK (Attack), USE (Interact)",
       statusOffline: "Offline Preview",
       statusConnecting: "Connecting...",
       statusConnected: "Connected",
@@ -153,6 +155,8 @@ export const resources = {
       changeArchetype: "Сменить кота",
       controlsHint:
         "ПК: WASD / Стрелки или клик мышью, Shift (Рывок), Пробел (Атака), E (Взаимодействие)",
+      mobileControlsHint:
+        "Телефон: Джойстик для движения, RUN (Рывок), ATK (Атака), USE (Взаимодействие)",
       statusOffline: "Офлайн-режим",
       statusConnecting: "Подключение...",
       statusConnected: "Подключено",
