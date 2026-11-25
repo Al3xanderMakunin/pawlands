@@ -12,8 +12,9 @@ import {
   type TelegramAuthRequest,
   type VkAuthRequest,
 } from "@pawlands/protocol";
+import { getEnv } from "../config/env";
 
-const apiUrl = (import.meta.env.VITE_API_URL ?? "http://localhost:2567").replace(/\/+$/, "");
+const apiUrl = (getEnv("VITE_API_URL") ?? "http://localhost:2567").replace(/\/+$/, "");
 
 export function getYandexAuthUrl(): string {
   return `${apiUrl}/api/v1/auth/yandex`;

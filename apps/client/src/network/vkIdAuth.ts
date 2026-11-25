@@ -1,4 +1,5 @@
 import type { VkAuthRequest } from "@pawlands/protocol";
+import { getEnv } from "../config/env";
 
 const VK_AUTH_URL = "https://id.vk.ru/oauth2/auth";
 const VK_PKCE_STORAGE_KEY = "pawlands.vk_pkce";
@@ -41,16 +42,11 @@ async function generateCodeChallenge(codeVerifier: string): Promise<string> {
 }
 
 export function resolveVkRedirectUri(): string {
-  const configured = import.meta.env.VITE_VK_REDIRECT_URI?.trim();
-  if (configured) {
-    return configured;
-  }
-  return `${window.location.origin}/`;
+  return getEnv("VITE_VK_REDIRECT_URI") ?? `${window.location.origin}/`;
 }
 
 export function getVkClientId(): string | null {
-  const clientId = import.meta.env.VITE_VK_CLIENT_ID?.trim();
-  return clientId || null;
+  return getEnv("VITE_VK_CLIENT_ID") ?? null;
 }
 
 export async function startVkIdAuth(): Promise<"redirecting" | "not_configured"> {

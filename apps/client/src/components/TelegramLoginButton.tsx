@@ -1,12 +1,10 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { getEnv } from "../config/env";
 
 declare global {
   interface Window {
     pawlandsOnTelegramAuth?: (user: unknown) => void;
-    __PAWLANDS_ENV__?: {
-      VITE_TELEGRAM_BOT_USERNAME?: string;
-    };
   }
 }
 
@@ -16,10 +14,8 @@ interface TelegramLoginButtonProps {
 }
 
 function resolveTelegramBotUsername(): string {
-  const runtimeValue =
-    typeof window !== "undefined" ? window.__PAWLANDS_ENV__?.VITE_TELEGRAM_BOT_USERNAME : undefined;
-  const raw = runtimeValue || import.meta.env.VITE_TELEGRAM_BOT_USERNAME || "";
-  return raw.trim().replace(/^@+/, "");
+  const raw = getEnv("VITE_TELEGRAM_BOT_USERNAME") ?? "";
+  return raw.replace(/^@+/, "");
 }
 
 export function TelegramLoginButton({ onAuth, disabled = false }: TelegramLoginButtonProps) {

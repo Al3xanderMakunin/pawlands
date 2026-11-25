@@ -1,4 +1,5 @@
 import type { AppleAuthRequest } from "@pawlands/protocol";
+import { getEnv } from "../config/env";
 
 const APPLE_SDK_URL =
   "https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js";
@@ -106,9 +107,7 @@ export async function signInWithApplePopup(clientId: string): Promise<AppleAuthR
   const appleId = await loadAppleSdk();
   const nonce = generateRandomHex(16);
   const state = generateRandomHex(16);
-  const redirectURI =
-    (import.meta.env.VITE_APPLE_REDIRECT_URI as string | undefined)?.trim() ||
-    window.location.origin;
+  const redirectURI = getEnv("VITE_APPLE_REDIRECT_URI") ?? window.location.origin;
 
   appleId.auth.init({
     clientId,

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { getEnv } from "../config/env";
 import {
   AuthErrorCodeSchema,
   type AuthErrorCode,
@@ -151,7 +152,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
   loginWithApple: async () => {
     set({ isSubmitting: true, errorCode: null });
     try {
-      let appleClientId = (import.meta.env.VITE_APPLE_CLIENT_ID as string | undefined)?.trim() || null;
+      let appleClientId = getEnv("VITE_APPLE_CLIENT_ID") ?? null;
       if (!appleClientId) {
         const providers = await fetchAuthProviders();
         appleClientId = providers.apple.enabled ? providers.apple.clientId : null;

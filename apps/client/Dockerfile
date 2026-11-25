@@ -19,13 +19,6 @@ COPY tsconfig.base.json ./
 COPY packages ./packages
 COPY apps/client ./apps/client
 
-ARG VITE_API_URL
-ARG VITE_WS_URL
-ARG VITE_TELEGRAM_BOT_USERNAME
-ENV VITE_API_URL=${VITE_API_URL}
-ENV VITE_WS_URL=${VITE_WS_URL}
-ENV VITE_TELEGRAM_BOT_USERNAME=${VITE_TELEGRAM_BOT_USERNAME}
-
 RUN pnpm --filter './packages/*' build && pnpm --filter @pawlands/client build
 
 FROM nginx:1.31-alpine AS runner

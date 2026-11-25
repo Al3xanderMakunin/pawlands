@@ -13,8 +13,9 @@ import {
   type AdminUsersQuery,
   type AdminZoneSummary,
 } from "@pawlands/protocol";
+import { getEnv } from "../config/env";
 
-const apiUrl = (import.meta.env.VITE_API_URL ?? "http://localhost:2567").replace(/\/+$/, "");
+const apiUrl = (getEnv("VITE_API_URL") ?? "http://localhost:2567").replace(/\/+$/, "");
 
 export class AdminApiError extends Error {
   readonly code: AdminErrorCode | "NETWORK_ERROR";
