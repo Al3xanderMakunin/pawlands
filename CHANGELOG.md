@@ -4,6 +4,17 @@ All notable changes to **Pawlands** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0](https://github.com/Al3xanderMakunin/pawlands/compare/v1.3.0...v1.4.0) (2026-11-25)
+
+
+### Features
+
+* **gameplay:** добавить выживание и ролевую прогрессию ([5d2e978](https://github.com/Al3xanderMakunin/pawlands/commit/5d2e9788014599b5ba9c024a342ec9c76ef5dd16))
+* **multiplayer:** добавить предсказание и сверку движения ([af7babb](https://github.com/Al3xanderMakunin/pawlands/commit/af7babb29248ec79aaf8659ee4fb2b6d16302600))
+* **multiplayer:** подключить зональные комнаты и сетевое движение ([dbe3b6f](https://github.com/Al3xanderMakunin/pawlands/commit/dbe3b6f5edb99f970a8a42a8afc4eb6ac6496883))
+* **multiplayer:** сохранять состояние персонажа в PostgreSQL ([b07b9ab](https://github.com/Al3xanderMakunin/pawlands/commit/b07b9ab2b96175913c5bc4330f49adb8492f4860))
+* перенести выбор языка в настройки аккаунта ([195bb6c](https://github.com/Al3xanderMakunin/pawlands/commit/195bb6cd746b1e0d4b55e533009b6d0cdc0db2d0))
+
 ## [1.3.0](https://github.com/Al3xanderMakunin/pawlands/compare/v1.2.0...v1.3.0) (2026-11-25)
 
 
