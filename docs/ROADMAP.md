@@ -2,13 +2,13 @@
 
 Progress target: **6 stages / 30 milestones** leading to a public multiplayer Alpha release.
 
-## Stage 1: Game Core (0 / 5)
+## Stage 1: Game Core (5 / 5)
 
-- [ ] Tilemap rendering with Tiled JSON maps and pixel-art camera
-- [ ] Character archetype selection UI (`Tomcat`, `Cat`, `Kitten`)
-- [ ] Top-down 4/8-directional movement and sprite animations
-- [ ] Static obstacle and tilemap collision handling
-- [ ] Responsive mobile touch controls (virtual joystick + action buttons)
+- [x] Tilemap rendering with Tiled JSON maps and pixel-art camera
+- [x] Character archetype selection UI (`Tomcat`, `Cat`, `Kitten`)
+- [x] Top-down 4/8-directional movement and sprite animations
+- [x] Static obstacle and tilemap collision handling
+- [x] Responsive mobile touch controls (virtual joystick + action buttons)
 
 ## Stage 2: Multiplayer Foundation (0 / 5)
 

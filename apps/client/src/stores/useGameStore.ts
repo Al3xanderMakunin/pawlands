@@ -3,14 +3,23 @@ import { ARCHETYPES } from "@pawlands/game-data";
 import type { CharacterArchetype, SurvivalState, ZoneId } from "@pawlands/shared";
 
 export type ConnectionStatus = "offline" | "connecting" | "connected";
+export type TouchControlsMode = "auto" | "on" | "off";
 
 interface GameStoreState {
   selectedArchetype: CharacterArchetype;
+  hasEnteredWorld: boolean;
+  isArchetypeModalOpen: boolean;
   currentZoneId: ZoneId;
   connectionStatus: ConnectionStatus;
+  touchControlsMode: TouchControlsMode;
+  lastActionLabel: string | null;
   survival: SurvivalState;
   setArchetype: (archetype: CharacterArchetype) => void;
+  enterWorld: () => void;
+  setArchetypeModalOpen: (open: boolean) => void;
   setConnectionStatus: (status: ConnectionStatus) => void;
+  setTouchControlsMode: (mode: TouchControlsMode) => void;
+  setLastActionLabel: (label: string | null) => void;
 }
 
 function createInitialSurvival(archetype: CharacterArchetype): SurvivalState {
@@ -29,13 +38,25 @@ function createInitialSurvival(archetype: CharacterArchetype): SurvivalState {
 
 export const useGameStore = create<GameStoreState>((set) => ({
   selectedArchetype: "cat",
+  hasEnteredWorld: false,
+  isArchetypeModalOpen: true,
   currentZoneId: "oakpaw_village",
   connectionStatus: "offline",
+  touchControlsMode: "auto",
+  lastActionLabel: null,
   survival: createInitialSurvival("cat"),
   setArchetype: (archetype) =>
     set({
       selectedArchetype: archetype,
       survival: createInitialSurvival(archetype),
     }),
+  enterWorld: () =>
+    set({
+      hasEnteredWorld: true,
+      isArchetypeModalOpen: false,
+    }),
+  setArchetypeModalOpen: (isArchetypeModalOpen) => set({ isArchetypeModalOpen }),
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
+  setTouchControlsMode: (touchControlsMode) => set({ touchControlsMode }),
+  setLastActionLabel: (lastActionLabel) => set({ lastActionLabel }),
 }));
