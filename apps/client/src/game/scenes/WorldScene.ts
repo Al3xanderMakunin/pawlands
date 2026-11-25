@@ -6,11 +6,13 @@ import { useGameStore, type TouchControlsMode } from "../../stores/useGameStore"
 import i18n from "../../i18n";
 import { PlayerEntity } from "../entities/PlayerEntity";
 import { KeyboardInput } from "../input/KeyboardInput";
+import { MouseInput } from "../input/MouseInput";
 import { TouchControls } from "../input/TouchControls";
 
 export class WorldScene extends Phaser.Scene {
   private player!: PlayerEntity;
   private keyboardInput!: KeyboardInput;
+  private mouseInput!: MouseInput;
   private touchControls!: TouchControls;
   private unsubscribeStore: (() => void) | null = null;
   private actionClearTimer: Phaser.Time.TimerEvent | null = null;
@@ -52,6 +54,10 @@ export class WorldScene extends Phaser.Scene {
 
     // Input controllers
     this.keyboardInput = new KeyboardInput(this);
+    this.mouseInput = new MouseInput(this, {
+      bounds: { width: map.widthInPixels, height: map.heightInPixels },
+      canAcceptClick: () => !useGameStore.getState().isArchetypeModalOpen,
+    });
     this.touchControls = new TouchControls(
       this,
       this.shouldShowTouchControls(store.touchControlsMode, this.scale.width)
@@ -62,6 +68,9 @@ export class WorldScene extends Phaser.Scene {
     this.unsubscribeStore = useGameStore.subscribe((state, prevState) => {
       if (state.selectedArchetype !== prevState.selectedArchetype) {
         this.player.setArchetype(state.selectedArchetype);
+      }
+      if (state.isArchetypeModalOpen && !prevState.isArchetypeModalOpen) {
+        this.mouseInput.clear();
       }
       if (state.touchControlsMode !== prevState.touchControlsMode) {
         this.touchControls.setVisible(
@@ -75,15 +84,17 @@ export class WorldScene extends Phaser.Scene {
       this.unsubscribeStore?.();
       this.unsubscribeStore = null;
       this.keyboardInput.destroy();
+      this.mouseInput.destroy();
       this.touchControls.destroy();
     });
   }
 
-  update(): void {
+  update(_time: number, delta: number): void {
     if (!this.player) return;
 
     const store = useGameStore.getState();
     if (store.isArchetypeModalOpen && !store.hasEnteredWorld) {
+      this.mouseInput.clear();
       this.player.updateMovement(0, 0, 0, false);
       return;
     }
@@ -91,8 +102,20 @@ export class WorldScene extends Phaser.Scene {
     const kb = this.keyboardInput.sample();
     const touch = this.touchControls.sample();
 
-    const moveX = Math.abs(touch.moveX) > 0.05 ? touch.moveX : kb.moveX;
-    const moveY = Math.abs(touch.moveY) > 0.05 ? touch.moveY : kb.moveY;
+    const hasTouchMove = Math.abs(touch.moveX) > 0.05 || Math.abs(touch.moveY) > 0.05;
+    const hasKeyboardMove = kb.moveX !== 0 || kb.moveY !== 0;
+
+    if (hasTouchMove || hasKeyboardMove) {
+      this.mouseInput.clear();
+    }
+
+    const mouse =
+      hasTouchMove || hasKeyboardMove
+        ? { moveX: 0, moveY: 0, arrived: false, blocked: false }
+        : this.mouseInput.sample(this.player.sprite.x, this.player.sprite.y, delta);
+
+    const moveX = hasTouchMove ? touch.moveX : hasKeyboardMove ? kb.moveX : mouse.moveX;
+    const moveY = hasTouchMove ? touch.moveY : hasKeyboardMove ? kb.moveY : mouse.moveY;
 
     const archetypeStats = ARCHETYPES[this.player.getArchetype()].stats;
     const survivalMods = calculateSurvivalModifiers(store.survival.satiety);

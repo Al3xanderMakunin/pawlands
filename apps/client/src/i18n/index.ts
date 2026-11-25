@@ -51,7 +51,8 @@ export const resources = {
       pvpZone: "PvP",
       touchPad: "Touch",
       changeArchetype: "Change Cat",
-      controlsHint: "Desktop: WASD / Arrows, Shift (Sprint), Space (Attack), E (Interact)",
+      controlsHint:
+        "Desktop: WASD / Arrows or Click to move, Shift (Sprint), Space (Attack), E (Interact)",
       statusOffline: "Offline Preview",
       statusConnecting: "Connecting...",
       statusConnected: "Connected",
@@ -116,7 +117,8 @@ export const resources = {
       pvpZone: "PvP",
       touchPad: "Сенсор",
       changeArchetype: "Сменить кота",
-      controlsHint: "ПК: WASD / Стрелки, Shift (Рывок), Пробел (Атака), E (Взаимодействие)",
+      controlsHint:
+        "ПК: WASD / Стрелки или клик мышью, Shift (Рывок), Пробел (Атака), E (Взаимодействие)",
       statusOffline: "Офлайн-режим",
       statusConnecting: "Подключение...",
       statusConnected: "Подключено",
